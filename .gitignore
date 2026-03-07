@@ -1,0 +1,43 @@
+# --- Dữ liệu lớn (Dataset) ---
+# Không đẩy bộ dữ liệu ImageNet-Hard lên GitHub vì dung lượng rất lớn
+imagenet-hard/
+*.parquet
+
+# --- Dữ liệu đã xử lý (Processed Data & Artifacts) ---
+# Không lưu các file vector đặc trưng hoặc trọng số mô hình
+processed/
+*.npy
+*.npz
+*.h5
+*.pth
+*.pkl
+
+# --- Môi trường ảo (Virtual Environment) ---
+.venv/
+venv/
+env/
+bin/
+lib/
+include/
+share/
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ipynb_checkpoints/
+
+# --- IDE (VS Code) ---
+# Giữ lại nếu bạn muốn chia sẻ cấu hình debug, nhưng thường nên ignore
+.vscode/
+
+# --- Kết quả đầu ra (Outputs) ---
+# Có thể giữ lại folder nhưng ignore các file ảnh/kết quả nặng bên trong
+outputs/plots/
+outputs/clusters/
+*.log
+
+# --- Hệ điều hành ---
+.DS_Store
+Thumbs.db

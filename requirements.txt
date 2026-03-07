@@ -1,0 +1,12 @@
+pandas
+pyarrow
+torch
+torchvision
+pillow
+matplotlib
+scikit-learn
+python-igraph
+leidenalg
+infomap
+tqdm
+numpy
