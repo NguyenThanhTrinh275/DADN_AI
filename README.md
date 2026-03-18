@@ -86,6 +86,15 @@ python main.py
 
 # Chạy với sample nhỏ để test nhanh
 python main.py --sample 500
+
+# Tự động chọn thiết bị (GPU nếu có CUDA, ngược lại CPU)
+python main.py --device auto
+
+# Bắt buộc chạy trên CPU
+python main.py --device cpu
+
+# Yêu cầu chạy trên GPU (nếu không có CUDA sẽ tự fallback về CPU)
+python main.py --device gpu
 ```
 
 ## Metrics đánh giá

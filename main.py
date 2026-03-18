@@ -12,6 +12,9 @@ Pipeline:
 
 Cách chạy:
     python main.py
+    python main.py --device auto
+    python main.py --device cpu
+    python main.py --device gpu
     
 Hoặc với sample size nhỏ để test:
     python main.py --sample 500
@@ -36,12 +39,13 @@ from src.utils.visualization import (
 )
 
 
-def main(sample_size=None):
+def main(sample_size=None, device='auto'):
     """
     Pipeline chính cho Community Structure Identification
     
     Args:
         sample_size: Số lượng mẫu (None = toàn bộ dataset)
+        device: Thiết bị chạy feature extraction ('auto', 'cpu', 'gpu')
     """
     print("="*70)
     print("  COMMUNITY STRUCTURE IDENTIFICATION FOR IMAGE CLUSTERING")
@@ -57,7 +61,10 @@ def main(sample_size=None):
     print("="*50)
     
     df = load_data(sample_size=sample_size)
-    images, true_labels = extract_images_and_labels(df)
+    images, true_labels, true_label_sets = extract_images_and_labels(
+        df,
+        return_multilabel=True
+    )
     
     # =========================================================
     # STEP 2: TRÍCH XUẤT ĐẶC TRƯNG
@@ -66,7 +73,7 @@ def main(sample_size=None):
     print("[STEP 2/5] Extracting features using EfficientNet...")
     print("="*50)
     
-    extractor = FeatureExtractor()
+    extractor = FeatureExtractor(device=device)
     features = extractor.extract_features(images)
     print(f"Feature matrix shape: {features.shape}")
     
@@ -104,7 +111,7 @@ def main(sample_size=None):
     print("="*50)
     
     evaluation_results = evaluate_all_algorithms(
-        true_labels, 
+        true_label_sets,
         clustering_results, 
         graph
     )
@@ -157,7 +164,14 @@ if __name__ == "__main__":
         default=None,
         help='Number of samples to use (default: all)'
     )
+    parser.add_argument(
+        '--device', '-d',
+        type=str,
+        default='auto',
+        choices=['auto', 'cpu', 'gpu', 'cuda'],
+        help="Device for feature extraction: auto/cpu/gpu (default: auto)"
+    )
     
     args = parser.parse_args()
     
-    results = main(sample_size=args.sample)
+    results = main(sample_size=args.sample, device=args.device)

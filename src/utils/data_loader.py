@@ -25,6 +25,7 @@ def load_data(path=None, sample_size=None):
     if path is None:
         path = config.DATA_PATH
     
+    # Tìm tất cả các file có đuôi .parquet trong thư mục cấu hình.
     all_files = glob.glob(os.path.join(path, "*.parquet"))
     
     if not all_files:
@@ -45,27 +46,58 @@ def bytes_to_image(image_bytes):
     return Image.open(io.BytesIO(image_bytes)).convert('RGB')
 
 
-def extract_images_and_labels(df):
+def _normalize_label_values(label_value):
+    """Chuẩn hóa label về list giá trị"""
+    if isinstance(label_value, np.ndarray):
+        values = label_value.tolist()
+    elif isinstance(label_value, (list, tuple, set)):
+        values = list(label_value)
+    else:
+        values = [label_value]
+
+    cleaned = []
+    for value in values:
+        if pd.isna(value):
+            continue
+        if isinstance(value, np.generic):
+            value = value.item()
+        cleaned.append(value)
+
+    return cleaned
+
+
+def extract_images_and_labels(df, return_multilabel=False):
     """
     Trích xuất danh sách ảnh và nhãn từ DataFrame
     
     Args:
         df: DataFrame từ load_data()
+        return_multilabel: True để trả thêm danh sách labels cho từng ảnh
     
     Returns:
         images: List các bytes ảnh
-        labels: numpy array các nhãn
+        labels: numpy array nhãn chính (phần tử đầu tiên)
+        label_sets: List[set] các nhãn đầy đủ cho từng ảnh (nếu return_multilabel=True)
     """
     images = df['image'].apply(lambda x: x['bytes']).tolist()
-    
-    # Label có thể là numpy array, lấy phần tử đầu tiên
-    labels = df['label'].apply(
-        lambda x: x[0] if hasattr(x, '__len__') else x
-    ).values
+
+    normalized_labels = df['label'].apply(_normalize_label_values)
+
+    # Giữ hành vi cũ cho pipeline hiện tại: dùng nhãn đầu tiên làm nhãn chính
+    labels = normalized_labels.apply(lambda values: values[0]).values
+
+    label_sets = normalized_labels.apply(set).tolist()
+    multi_label_count = sum(1 for label_set in label_sets if len(label_set) > 1)
     
     print(f"Số lượng ảnh: {len(images)}")
     print(f"Số lượng classes: {len(np.unique(labels))}")
-    
+
+    if multi_label_count > 0:
+        print(f"Số ảnh có nhiều hơn 1 label: {multi_label_count}")
+
+    if return_multilabel:
+        return images, labels, label_sets
+
     return images, labels
 
 

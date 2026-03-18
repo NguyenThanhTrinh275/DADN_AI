@@ -35,6 +35,25 @@ class FeatureExtractor:
         'efficientnet_b7': {'input_size': 600, 'feature_dim': 2560},
         'resnet50': {'input_size': 224, 'feature_dim': 2048},
     }
+
+    @staticmethod
+    def _resolve_device(device):
+        """Chuẩn hóa device và fallback an toàn khi CUDA không sẵn sàng"""
+        requested_device = (device or 'auto').lower()
+
+        if requested_device == 'auto':
+            return 'cuda' if torch.cuda.is_available() else 'cpu'
+
+        if requested_device in ('gpu', 'cuda'):
+            if torch.cuda.is_available():
+                return 'cuda'
+            print("CUDA không khả dụng, tự động chuyển sang CPU.")
+            return 'cpu'
+
+        if requested_device == 'cpu':
+            return 'cpu'
+
+        raise ValueError("device phải là 'auto', 'cpu', 'gpu' hoặc 'cuda'")
     
     def __init__(self, model_name=None, device=None):
         """
@@ -42,10 +61,10 @@ class FeatureExtractor:
         
         Args:
             model_name: Tên model (mặc định từ config)
-            device: 'cuda' hoặc 'cpu' (mặc định từ config)
+            device: 'auto', 'gpu'/'cuda' hoặc 'cpu' (mặc định: config)
         """
         self.model_name = model_name or config.MODEL_NAME
-        self.device = device or config.DEVICE
+        self.device = self._resolve_device(device or config.DEVICE)
         
         if self.model_name not in self.SUPPORTED_MODELS:
             raise ValueError(f"Model '{self.model_name}' không được hỗ trợ. "
@@ -83,6 +102,9 @@ class FeatureExtractor:
         
         model = model.to(self.device)
         model.eval()
+
+        if self.device == 'cuda':
+            torch.backends.cudnn.benchmark = True
         
         print(f"Model loaded on {self.device}. Feature dimension: {self.feature_dim}")
         return model
