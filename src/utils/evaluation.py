@@ -13,6 +13,56 @@ from sklearn.metrics import (
 )
 
 
+def _is_multilabel_array(true_labels):
+    """Kiểm tra true_labels có phải dạng multi-label theo từng mẫu hay không"""
+    if len(true_labels) == 0:
+        return False
+
+    sample = true_labels[0]
+    return isinstance(sample, (list, tuple, set, np.ndarray))
+
+
+def _normalize_label_set(label_value):
+    """Chuẩn hóa label của một mẫu về set"""
+    if isinstance(label_value, np.ndarray):
+        values = label_value.tolist()
+    elif isinstance(label_value, (list, tuple, set)):
+        values = list(label_value)
+    else:
+        values = [label_value]
+
+    cleaned = set()
+    for value in values:
+        if value is None:
+            continue
+        if isinstance(value, float) and np.isnan(value):
+            continue
+        if isinstance(value, np.generic):
+            value = value.item()
+        cleaned.add(value)
+
+    return cleaned
+
+
+def _to_label_sets(true_labels):
+    """Chuyển mảng true labels về list các set nhãn"""
+    return [_normalize_label_set(label_value) for label_value in true_labels]
+
+
+def _to_single_labels_from_sets(label_sets):
+    """Tạo nhãn đại diện 1 giá trị từ multi-label để dùng cho metric chuẩn"""
+    single_labels = []
+    for label_set in label_sets:
+        if not label_set:
+            single_labels.append(-1)
+            continue
+
+        # Ổn định theo thứ tự tăng dần khi có nhiều label
+        single_labels.append(sorted(label_set)[0])
+
+    return np.array(single_labels)
+
+
 def compute_nmi(true_labels, pred_labels):
     """
     Normalized Mutual Information (NMI)
@@ -51,6 +101,38 @@ def compute_purity(true_labels, pred_labels):
         total_correct += most_common_count
     
     return total_correct / len(true_labels)
+
+
+def compute_relaxed_purity(true_label_sets, pred_labels):
+    """
+    Multi-label Purity (relaxed)
+
+    Mỗi cluster được gán 1 nhãn đại diện tốt nhất.
+    Một mẫu được tính đúng nếu nhãn đại diện nằm trong tập true labels của mẫu đó.
+    """
+    clusters = set(pred_labels)
+    total_correct = 0
+
+    for cluster_id in clusters:
+        cluster_indices = np.where(pred_labels == cluster_id)[0]
+        if len(cluster_indices) == 0:
+            continue
+
+        label_counter = Counter()
+        for idx in cluster_indices:
+            for label in true_label_sets[idx]:
+                label_counter[label] += 1
+
+        if not label_counter:
+            continue
+
+        best_label, _ = label_counter.most_common(1)[0]
+        cluster_correct = sum(
+            1 for idx in cluster_indices if best_label in true_label_sets[idx]
+        )
+        total_correct += cluster_correct
+
+    return total_correct / len(true_label_sets)
 
 
 def compute_modularity(graph, labels):
@@ -96,15 +178,33 @@ def evaluate_clustering(true_labels, pred_labels, graph=None):
     Returns:
         dict chứa tất cả metrics
     """
-    results = {
-        'NMI': compute_nmi(true_labels, pred_labels),
-        'ARI': compute_ari(true_labels, pred_labels),
-        'Purity': compute_purity(true_labels, pred_labels),
-        'FMI': compute_fmi(true_labels, pred_labels),
-        'V-Measure': compute_v_measure(true_labels, pred_labels),
-        'Homogeneity': homogeneity_score(true_labels, pred_labels),
-        'Completeness': completeness_score(true_labels, pred_labels),
-    }
+    pred_labels = np.asarray(pred_labels)
+
+    if _is_multilabel_array(true_labels):
+        true_label_sets = _to_label_sets(true_labels)
+        true_labels_single = _to_single_labels_from_sets(true_label_sets)
+
+        results = {
+            'NMI': compute_nmi(true_labels_single, pred_labels),
+            'ARI': compute_ari(true_labels_single, pred_labels),
+            'Purity': compute_purity(true_labels_single, pred_labels),
+            'Purity_relaxed': compute_relaxed_purity(true_label_sets, pred_labels),
+            'FMI': compute_fmi(true_labels_single, pred_labels),
+            'V-Measure': compute_v_measure(true_labels_single, pred_labels),
+            'Homogeneity': homogeneity_score(true_labels_single, pred_labels),
+            'Completeness': completeness_score(true_labels_single, pred_labels),
+        }
+    else:
+        results = {
+            'NMI': compute_nmi(true_labels, pred_labels),
+            'ARI': compute_ari(true_labels, pred_labels),
+            'Purity': compute_purity(true_labels, pred_labels),
+            'Purity_relaxed': compute_purity(true_labels, pred_labels),
+            'FMI': compute_fmi(true_labels, pred_labels),
+            'V-Measure': compute_v_measure(true_labels, pred_labels),
+            'Homogeneity': homogeneity_score(true_labels, pred_labels),
+            'Completeness': completeness_score(true_labels, pred_labels),
+        }
     
     if graph is not None:
         results['Modularity'] = compute_modularity(graph, pred_labels)
@@ -141,7 +241,7 @@ def print_evaluation_results(results, metrics=None):
         metrics: List metrics cần hiển thị (mặc định: NMI, ARI, Purity, Modularity)
     """
     if metrics is None:
-        metrics = ['NMI', 'ARI', 'Purity', 'Modularity']
+        metrics = ['NMI', 'ARI', 'Purity', 'Purity_relaxed', 'Modularity']
     
     # Header
     print("\n" + "="*70)
@@ -196,6 +296,13 @@ def get_cluster_statistics(labels, true_labels=None):
     }
     
     if true_labels is not None:
-        stats['n_true_classes'] = len(np.unique(true_labels))
+        if _is_multilabel_array(true_labels):
+            true_label_sets = _to_label_sets(true_labels)
+            all_true_labels = set()
+            for label_set in true_label_sets:
+                all_true_labels.update(label_set)
+            stats['n_true_classes'] = len(all_true_labels)
+        else:
+            stats['n_true_classes'] = len(np.unique(true_labels))
     
     return stats

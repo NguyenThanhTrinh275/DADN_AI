@@ -17,7 +17,7 @@ def build_knn_graph(features, k=None, metric=None):
     1. Tính độ tương đồng/khoảng cách giữa các vector
     2. Mỗi node kết nối với k láng giềng gần nhất
     3. Chuyển thành undirected graph (symmetric)
-    
+       
     Args:
         features: Ma trận đặc trưng (n_samples, n_features)
         k: Số láng giềng gần nhất (mặc định từ config)

@@ -95,7 +95,45 @@ python main.py --device cpu
 
 # Yêu cầu chạy trên GPU (nếu không có CUDA sẽ tự fallback về CPU)
 python main.py --device gpu
+
+# Chạy full pipeline và lưu feature cache để dùng lại
+python main.py --device gpu --save-feature-cache
+
+# Chạy từ feature cache (bỏ qua bước extract feature)
+python main.py --use-feature-cache
+
+# Dùng đường dẫn cache cụ thể
+python main.py --use-feature-cache --feature-cache-path results/cache/features_efficientnet_v2_l_full.npz
 ```
+
+## Tái sử dụng feature đã trích xuất
+
+Bạn có thể lưu lại `feature vectors` và `true labels` để không cần trích xuất lại từ ảnh ở các lần chạy sau.
+
+### 1) Lần chạy đầu: tạo cache
+
+```bash
+python main.py --device gpu --save-feature-cache
+```
+
+Mặc định cache được lưu tại:
+
+```text
+results/cache/features_<model_name>_<sample|full>.npz
+```
+
+Ví dụ:
+
+- `results/cache/features_efficientnet_v2_l_full.npz`
+- `results/cache/features_efficientnet_v2_l_sample500.npz`
+
+### 2) Lần chạy sau: dùng cache
+
+```bash
+python main.py --use-feature-cache
+```
+
+Khi dùng cache, pipeline sẽ bắt đầu từ bước xây dựng đồ thị + 4 thuật toán + đánh giá.
 
 ## Metrics đánh giá
 

@@ -21,6 +21,7 @@ Hoặc với sample size nhỏ để test:
 """
 
 import argparse
+import os
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -30,6 +31,7 @@ from src.utils.data_loader import load_data, extract_images_and_labels
 from src.models.feature_extractor import FeatureExtractor
 from src.models.graph_builder import build_knn_graph, get_graph_statistics
 from src.models.clustering import run_all_algorithms
+from src.utils.feature_cache import save_feature_cache, load_feature_cache
 from src.utils.evaluation import evaluate_all_algorithms, print_evaluation_results
 from src.utils.visualization import (
     plot_metrics_comparison,
@@ -39,43 +41,97 @@ from src.utils.visualization import (
 )
 
 
-def main(sample_size=None, device='auto'):
+def _default_cache_path(sample_size):
+    sample_tag = f"sample{sample_size}" if sample_size is not None else "full"
+    return os.path.join(
+        config.RESULTS_PATH,
+        "cache",
+        f"features_{config.MODEL_NAME}_{sample_tag}.npz"
+    )
+
+
+def main(
+    sample_size=None,
+    device='auto',
+    use_feature_cache=False,
+    save_feature_cache_enabled=False,
+    feature_cache_path=None
+):
     """
     Pipeline chính cho Community Structure Identification
     
     Args:
         sample_size: Số lượng mẫu (None = toàn bộ dataset)
         device: Thiết bị chạy feature extraction ('auto', 'cpu', 'gpu')
+        use_feature_cache: Dùng feature/label đã lưu sẵn
+        save_feature_cache_enabled: Lưu feature/label sau khi extract
+        feature_cache_path: Đường dẫn file cache .npz
     """
+    if feature_cache_path is None:
+        feature_cache_path = _default_cache_path(sample_size)
+
     print("="*70)
     print("  COMMUNITY STRUCTURE IDENTIFICATION FOR IMAGE CLUSTERING")
     print("  Dataset: ImageNet-Hard")
     print("  Algorithms: Infomap, Leiden, Louvain, LPA")
     print("="*70)
-    
-    # =========================================================
-    # STEP 1: TẢI DỮ LIỆU
-    # =========================================================
-    print("\n" + "="*50)
-    print("[STEP 1/5] Loading data from parquet files...")
-    print("="*50)
-    
-    df = load_data(sample_size=sample_size)
-    images, true_labels, true_label_sets = extract_images_and_labels(
-        df,
-        return_multilabel=True
-    )
-    
-    # =========================================================
-    # STEP 2: TRÍCH XUẤT ĐẶC TRƯNG
-    # =========================================================
-    print("\n" + "="*50)
-    print("[STEP 2/5] Extracting features using EfficientNet...")
-    print("="*50)
-    
-    extractor = FeatureExtractor(device=device)
-    features = extractor.extract_features(images)
-    print(f"Feature matrix shape: {features.shape}")
+
+    images = None
+    true_label_sets = None
+
+    if use_feature_cache:
+        print("\n" + "="*50)
+        print("[STEP 1/5] Loading features and labels from cache...")
+        print("="*50)
+
+        cache_data = load_feature_cache(feature_cache_path)
+        features = cache_data['features']
+        true_label_sets = cache_data['true_label_sets']
+        cache_metadata = cache_data.get('metadata', {})
+
+        print(f"Loaded cache: {feature_cache_path}")
+        print(f"Feature matrix shape: {features.shape}")
+        if cache_metadata:
+            print(f"Cache metadata: {cache_metadata}")
+
+        print("\n" + "="*50)
+        print("[STEP 2/5] Skipping feature extraction (using cached data)...")
+        print("="*50)
+    else:
+        # =========================================================
+        # STEP 1: TẢI DỮ LIỆU
+        # =========================================================
+        print("\n" + "="*50)
+        print("[STEP 1/5] Loading data from parquet files...")
+        print("="*50)
+
+        df = load_data(sample_size=sample_size)
+        images, _, true_label_sets = extract_images_and_labels(
+            df,
+            return_multilabel=True
+        )
+
+        # =========================================================
+        # STEP 2: TRÍCH XUẤT ĐẶC TRƯNG
+        # =========================================================
+        print("\n" + "="*50)
+        print("[STEP 2/5] Extracting features using EfficientNet...")
+        print("="*50)
+
+        extractor = FeatureExtractor(device=device)
+        features = extractor.extract_features(images)
+        print(f"Feature matrix shape: {features.shape}")
+
+        if save_feature_cache_enabled:
+            cache_metadata = {
+                'model_name': extractor.model_name,
+                'device': extractor.device,
+                'sample_size': sample_size,
+                'feature_dim': int(features.shape[1]) if features.ndim == 2 else None,
+                'n_samples': int(features.shape[0]),
+            }
+            save_feature_cache(feature_cache_path, features, true_label_sets, cache_metadata)
+            print(f"Saved feature cache to: {feature_cache_path}")
     
     # =========================================================
     # STEP 3: XÂY DỰNG ĐỒ THỊ
@@ -139,7 +195,10 @@ def main(sample_size=None, device='auto'):
     best_algo = max(evaluation_results.keys(), 
                    key=lambda x: evaluation_results[x]['NMI'])
     print(f"\nVisualizing clusters from best algorithm: {best_algo}")
-    visualize_clusters(images, clustering_results[best_algo])
+    if images is not None:
+        visualize_clusters(images, clustering_results[best_algo])
+    else:
+        print("Skip cluster image visualization vì đang chạy từ cache (không có image bytes).")
     
     print("\n" + "="*70)
     print("  PIPELINE COMPLETED SUCCESSFULLY!")
@@ -171,7 +230,29 @@ if __name__ == "__main__":
         choices=['auto', 'cpu', 'gpu', 'cuda'],
         help="Device for feature extraction: auto/cpu/gpu (default: auto)"
     )
+    parser.add_argument(
+        '--use-feature-cache',
+        action='store_true',
+        help='Load precomputed features + labels from cache and skip extraction'
+    )
+    parser.add_argument(
+        '--save-feature-cache',
+        action='store_true',
+        help='Save extracted features + labels to cache for later runs'
+    )
+    parser.add_argument(
+        '--feature-cache-path',
+        type=str,
+        default=None,
+        help='Path to feature cache file (.npz). Default: results/cache/features_<model>_<sample|full>.npz'
+    )
     
     args = parser.parse_args()
     
-    results = main(sample_size=args.sample, device=args.device)
+    results = main(
+        sample_size=args.sample,
+        device=args.device,
+        use_feature_cache=args.use_feature_cache,
+        save_feature_cache_enabled=args.save_feature_cache,
+        feature_cache_path=args.feature_cache_path
+    )
