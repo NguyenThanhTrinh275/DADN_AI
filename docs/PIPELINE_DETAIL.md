@@ -6,8 +6,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                        COMMUNITY STRUCTURE IDENTIFICATION                    │
-│                          FOR IMAGE CLUSTERING                                │
+│                        COMMUNITY STRUCTURE IDENTIFICATION                   │
+│                          FOR IMAGE CLUSTERING                               │
 └─────────────────────────────────────────────────────────────────────────────┘
 
 ┌─────────────┐    ┌─────────────────┐    ┌─────────────────┐    ┌─────────────┐
@@ -19,17 +19,17 @@
       ▼                    ▼                       ▼                     ▼
  ~11,000 ảnh         1280-dim vectors         Similarity Graph      4 Algorithms
  100 classes         EfficientNet-V2-L        Cosine Similarity     Infomap, etc.
-                                                                           │
-                                                                           ▼
-                                              ┌─────────────────┐    ┌─────────────┐
-                                              │   STEP 5        │◄───│  Cluster    │
-                                              │   Evaluation    │    │   Labels    │
-                                              │   & Compare     │    │             │
-                                              └─────────────────┘    └─────────────┘
-                                                      │
-                                                      ▼
-                                               NMI, ARI, Purity
-                                                 Modularity
+                                                                         │
+                                                                         ▼
+                                           ┌─────────────────┐    ┌─────────────┐
+                                           │   STEP 5        │◄───│  Cluster    │
+                                           │   Evaluation    │    │   Labels    │
+                                           │   & Compare     │    │             │
+                                           └─────────────────┘    └─────────────┘
+                                                    │
+                                                    ▼
+                                             NMI, ARI, Purity
+                                                Modularity
 ```
 
 ---
