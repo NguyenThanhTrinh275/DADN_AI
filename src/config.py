@@ -9,7 +9,7 @@ class Config:
     RESULTS_PATH = 'results'
     
     # Feature Extraction
-    MODEL_NAME = 'efficientnet_v2_l'  # efficientnet_v2_l, efficientnet_v2_m, efficientnet_v2_s, resnet50
+    MODEL_NAME = 'dinov2_vits14'  # efficientnet_v2_l, efficientnet_v2_m, efficientnet_v2_s, efficientnet_b7, resnet50, dinov2_vits14
     BATCH_SIZE = 32
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     

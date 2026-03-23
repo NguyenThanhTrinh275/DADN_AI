@@ -29,25 +29,31 @@ def plot_metrics_comparison(results, save_path=None):
         save_path = os.path.join(config.RESULTS_PATH, 'comparison.png')
     
     algorithms = list(results.keys())
-    metrics = ['NMI', 'ARI', 'Purity', 'Modularity']
+    metrics = ['NMI', 'Purity', 'ARI', 'Modularity']
     colors = ['#2ecc71', '#3498db', '#e74c3c', '#9b59b6']
-    
+
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
     axes = axes.flatten()
-    
+
     for idx, metric in enumerate(metrics):
         values = [results[algo].get(metric, 0) for algo in algorithms]
         bars = axes[idx].bar(algorithms, values, color=colors[idx], edgecolor='black')
-        
+
         axes[idx].set_title(f'{metric} Comparison', fontsize=14, fontweight='bold')
         axes[idx].set_ylabel(metric, fontsize=12)
         axes[idx].set_ylim(0, 1.1 if metric != 'ARI' else max(values) + 0.1)
-        
+
         # Hiển thị giá trị trên bar
         for bar, v in zip(bars, values):
-            axes[idx].text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.02,
-                          f'{v:.3f}', ha='center', va='bottom', fontsize=11)
-        
+            axes[idx].text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + 0.02,
+                f'{v:.3f}',
+                ha='center',
+                va='bottom',
+                fontsize=11
+            )
+
         axes[idx].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
         axes[idx].grid(axis='y', alpha=0.3)
     
@@ -71,24 +77,24 @@ def plot_radar_chart(results, save_path=None):
         save_path = os.path.join(config.RESULTS_PATH, 'radar_chart.png')
     
     algorithms = list(results.keys())
-    metrics = ['NMI', 'ARI', 'Purity', 'Modularity']
-    
+    metrics = ['NMI', 'Purity', 'ARI', 'Modularity']
+
     # Số lượng metrics
     n_metrics = len(metrics)
     angles = np.linspace(0, 2 * np.pi, n_metrics, endpoint=False).tolist()
     angles += angles[:1]  # Đóng vòng
-    
+
     fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(polar=True))
-    
+
     colors = ['#2ecc71', '#3498db', '#e74c3c', '#9b59b6']
-    
+
     for idx, algo in enumerate(algorithms):
         values = [max(0, results[algo].get(m, 0)) for m in metrics]
         values += values[:1]
-        
+
         ax.plot(angles, values, 'o-', linewidth=2, label=algo, color=colors[idx])
         ax.fill(angles, values, alpha=0.15, color=colors[idx])
-    
+
     ax.set_xticks(angles[:-1])
     ax.set_xticklabels(metrics, fontsize=12)
     ax.set_ylim(0, 1)

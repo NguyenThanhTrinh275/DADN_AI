@@ -26,6 +26,7 @@ class FeatureExtractor:
     - efficientnet_v2_s (1280 dims)
     - efficientnet_b7 (2560 dims)
     - resnet50 (2048 dims)
+    - dinov2_vits14 (384 dims)
     """
     
     SUPPORTED_MODELS = {
@@ -34,6 +35,7 @@ class FeatureExtractor:
         'efficientnet_v2_s': {'input_size': 384, 'feature_dim': 1280},
         'efficientnet_b7': {'input_size': 600, 'feature_dim': 2560},
         'resnet50': {'input_size': 224, 'feature_dim': 2048},
+        'dinov2_vits14': {'input_size': 224, 'feature_dim': 384},
     }
 
     @staticmethod
@@ -99,6 +101,16 @@ class FeatureExtractor:
         elif self.model_name == 'resnet50':
             model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
             model = nn.Sequential(*list(model.children())[:-1])
+
+        elif self.model_name == 'dinov2_vits14':
+            try:
+                # DINOv2 backbone từ torch.hub (facebookresearch/dinov2)
+                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+            except Exception as exc:
+                raise RuntimeError(
+                    "Không tải được DINOv2 từ torch.hub. "
+                    "Kiểm tra kết nối mạng và thử lại."
+                ) from exc
         
         model = model.to(self.device)
         model.eval()

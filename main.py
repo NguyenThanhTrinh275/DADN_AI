@@ -8,7 +8,7 @@ Pipeline:
 2. Feature Extraction (EfficientNet) → Vector cao chiều  
 3. Build Graph (k-NN + Cosine Similarity) → Đồ thị cộng đồng
 4. Community Detection (4 thuật toán) → Cluster labels
-5. Evaluate & Compare với Ground Truth → NMI, ARI, Purity
+5. Evaluate & Compare với Ground Truth → NMI, Purity, ARI, Modularity
 
 Cách chạy:
     python main.py
@@ -191,9 +191,11 @@ def main(
     # Phân bố cluster
     plot_cluster_distribution(clustering_results)
     
-    # Visualize clusters của thuật toán tốt nhất
-    best_algo = max(evaluation_results.keys(), 
-                   key=lambda x: evaluation_results[x]['NMI'])
+    # Visualize clusters của thuật toán tốt nhất theo NMI
+    best_algo = max(
+        evaluation_results.keys(),
+        key=lambda x: evaluation_results[x]['NMI']
+    )
     print(f"\nVisualizing clusters from best algorithm: {best_algo}")
     if images is not None:
         visualize_clusters(images, clustering_results[best_algo])

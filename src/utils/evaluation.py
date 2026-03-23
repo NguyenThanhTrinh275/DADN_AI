@@ -176,40 +176,29 @@ def evaluate_clustering(true_labels, pred_labels, graph=None):
         graph: igraph.Graph (optional, để tính modularity)
     
     Returns:
-        dict chứa tất cả metrics
+        dict chứa 4 metrics: NMI, Purity, ARI, Modularity
     """
     pred_labels = np.asarray(pred_labels)
 
     if _is_multilabel_array(true_labels):
         true_label_sets = _to_label_sets(true_labels)
         true_labels_single = _to_single_labels_from_sets(true_label_sets)
-
-        results = {
-            'NMI': compute_nmi(true_labels_single, pred_labels),
-            'ARI': compute_ari(true_labels_single, pred_labels),
-            'Purity': compute_purity(true_labels_single, pred_labels),
-            'Purity_relaxed': compute_relaxed_purity(true_label_sets, pred_labels),
-            'FMI': compute_fmi(true_labels_single, pred_labels),
-            'V-Measure': compute_v_measure(true_labels_single, pred_labels),
-            'Homogeneity': homogeneity_score(true_labels_single, pred_labels),
-            'Completeness': completeness_score(true_labels_single, pred_labels),
-        }
+        purity = compute_purity(true_labels_single, pred_labels)
+        nmi = compute_nmi(true_labels_single, pred_labels)
+        ari = compute_ari(true_labels_single, pred_labels)
     else:
-        results = {
-            'NMI': compute_nmi(true_labels, pred_labels),
-            'ARI': compute_ari(true_labels, pred_labels),
-            'Purity': compute_purity(true_labels, pred_labels),
-            'Purity_relaxed': compute_purity(true_labels, pred_labels),
-            'FMI': compute_fmi(true_labels, pred_labels),
-            'V-Measure': compute_v_measure(true_labels, pred_labels),
-            'Homogeneity': homogeneity_score(true_labels, pred_labels),
-            'Completeness': completeness_score(true_labels, pred_labels),
-        }
-    
-    if graph is not None:
-        results['Modularity'] = compute_modularity(graph, pred_labels)
-    
-    return results
+        purity = compute_purity(true_labels, pred_labels)
+        nmi = compute_nmi(true_labels, pred_labels)
+        ari = compute_ari(true_labels, pred_labels)
+
+    modularity = compute_modularity(graph, pred_labels) if graph is not None else np.nan
+
+    return {
+        'NMI': nmi,
+        'Purity': purity,
+        'ARI': ari,
+        'Modularity': modularity,
+    }
 
 
 def evaluate_all_algorithms(true_labels, clustering_results, graph=None):
@@ -238,10 +227,10 @@ def print_evaluation_results(results, metrics=None):
     
     Args:
         results: dict {algorithm_name: {metric: value}}
-        metrics: List metrics cần hiển thị (mặc định: NMI, ARI, Purity, Modularity)
+        metrics: List metrics cần hiển thị (mặc định: NMI, Purity, ARI, Modularity)
     """
     if metrics is None:
-        metrics = ['NMI', 'ARI', 'Purity', 'Purity_relaxed', 'Modularity']
+        metrics = ['NMI', 'Purity', 'ARI', 'Modularity']
     
     # Header
     print("\n" + "="*70)
