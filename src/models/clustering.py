@@ -13,6 +13,11 @@ import leidenalg
 from src.config import config
 
 
+def _get_weights(graph):
+    """Lấy weights nếu đồ thị có thuộc tính weight"""
+    return graph.es['weight'] if 'weight' in graph.es.attributes() else None
+
+
 def cluster_infomap(graph):
     """
     Thuật toán Infomap - dựa trên lý thuyết thông tin
@@ -34,6 +39,7 @@ def cluster_infomap(graph):
         numpy array chứa cluster labels
     """
     print("Running Infomap...")
+    weights = _get_weights(graph)
     
     try:
         from infomap import Infomap
@@ -41,8 +47,12 @@ def cluster_infomap(graph):
         im = Infomap(silent=True)
         
         # Thêm các cạnh vào Infomap
-        for edge in graph.get_edgelist():
-            im.add_link(edge[0], edge[1])
+        for edge in graph.es:
+            source, target = edge.tuple
+            if weights is not None:
+                im.add_link(source, target, edge['weight'])
+            else:
+                im.add_link(source, target)
         
         im.run()
         
@@ -54,7 +64,7 @@ def cluster_infomap(graph):
         
     except ImportError:
         print("  → Infomap package không có, sử dụng igraph's implementation")
-        communities = graph.community_infomap()
+        communities = graph.community_infomap(edge_weights=weights)
         labels = np.array(communities.membership)
     
     n_clusters = len(set(labels))
@@ -85,12 +95,14 @@ def cluster_leiden(graph, resolution=None):
     """
     if resolution is None:
         resolution = config.LEIDEN_RESOLUTION
+    weights = _get_weights(graph)
     
     print(f"Running Leiden (resolution={resolution})...")
     
     partition = leidenalg.find_partition(
         graph,
         leidenalg.RBConfigurationVertexPartition,
+        weights=weights,
         resolution_parameter=resolution
     )
     
@@ -123,10 +135,11 @@ def cluster_louvain(graph, resolution=None):
     """
     if resolution is None:
         resolution = config.LOUVAIN_RESOLUTION
+    weights = _get_weights(graph)
     
     print(f"Running Louvain (resolution={resolution})...")
     
-    communities = graph.community_multilevel(resolution=resolution)
+    communities = graph.community_multilevel(weights=weights, resolution=resolution)
     labels = np.array(communities.membership)
     
     n_clusters = len(set(labels))
@@ -160,8 +173,9 @@ def cluster_lpa(graph):
         numpy array chứa cluster labels
     """
     print("Running Label Propagation Algorithm (LPA)...")
-    
-    communities = graph.community_label_propagation()
+    weights = _get_weights(graph)
+
+    communities = graph.community_label_propagation(weights=weights)
     labels = np.array(communities.membership)
     
     n_clusters = len(set(labels))

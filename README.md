@@ -47,11 +47,11 @@ DADN_TTNT/
 │   ├── clusters.png           # Cluster visualization
 │   └── cluster_distribution.png
 │
-├── docs/                       # Documentation
+├── docs/                      # Documentation
 │   ├── PIPELINE_DETAIL.md     # Chi tiết pipeline
 │   └── FINETUNING_GUIDE.md    # Hướng dẫn fine-tuning
 │
-└── notebooks/                  # Jupyter notebooks cho experiments
+└── notebooks/                 # Jupyter notebooks cho experiments
 ```
 
 ## Các thuật toán được implement

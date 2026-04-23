@@ -1,7 +1,7 @@
 """
-Đề tài 3: Community Structure Identification cho bài toán phân cụm hình ảnh
+Community Structure Identification cho bài toán phân cụm hình ảnh
 Dataset: ImageNet-Hard
-Thuật toán: Infomap, Leiden, Louvain, Label Propagation (LPA)
+Algorithms: Infomap, Leiden, Louvain, Label Propagation (LPA)
 
 Pipeline:
 1. Load Data (Parquet) → Ảnh bytes
@@ -9,15 +9,6 @@ Pipeline:
 3. Build Graph (k-NN + Cosine Similarity) → Đồ thị cộng đồng
 4. Community Detection (4 thuật toán) → Cluster labels
 5. Evaluate & Compare với Ground Truth → NMI, Purity, ARI, Modularity
-
-Cách chạy:
-    python main.py
-    python main.py --device auto
-    python main.py --device cpu
-    python main.py --device gpu
-    
-Hoặc với sample size nhỏ để test:
-    python main.py --sample 500
 """
 
 import argparse
@@ -32,13 +23,14 @@ from src.models.feature_extractor import FeatureExtractor
 from src.models.graph_builder import build_knn_graph, get_graph_statistics
 from src.models.clustering import run_all_algorithms
 from src.utils.feature_cache import save_feature_cache, load_feature_cache
-from src.utils.evaluation import evaluate_all_algorithms, print_evaluation_results
+from src.utils.evaluation import evaluate_all_algorithms, print_evaluation_results, get_cluster_statistics
 from src.utils.visualization import (
     plot_metrics_comparison,
     plot_radar_chart,
     visualize_clusters,
     plot_cluster_distribution
 )
+from src.utils.result_logger import ResultLogger
 
 
 def _default_cache_path(sample_size):
@@ -55,7 +47,9 @@ def main(
     device='auto',
     use_feature_cache=False,
     save_feature_cache_enabled=False,
-    feature_cache_path=None
+    feature_cache_path=None,
+    log_results=True,
+    log_path='results/results.csv'
 ):
     """
     Pipeline chính cho Community Structure Identification
@@ -66,6 +60,8 @@ def main(
         use_feature_cache: Dùng feature/label đã lưu sẵn
         save_feature_cache_enabled: Lưu feature/label sau khi extract
         feature_cache_path: Đường dẫn file cache .npz
+        log_results: Ghi kết quả vào CSV (default: True)
+        log_path: Đường dẫn file CSV để lưu kết quả
     """
     if feature_cache_path is None:
         feature_cache_path = _default_cache_path(sample_size)
@@ -202,9 +198,45 @@ def main(
     else:
         print("Skip cluster image visualization vì đang chạy từ cache (không có image bytes).")
     
+    # =========================================================
+    # LOGGING KẾT QUẢ VÀO CSV
+    # =========================================================
+    if log_results:
+        print("\n" + "="*50)
+        print("Logging results to CSV...")
+        print("="*50)
+        
+        logger = ResultLogger(log_path)
+        
+        # Chuẩn bị dữ liệu đầu vào cho logger
+        # Thêm thông tin cluster statistics vào evaluation_results
+        clustering_results_with_stats = {}
+        for algo_name, pred_labels in clustering_results.items():
+            stats = get_cluster_statistics(pred_labels)
+            # Merge evaluation metrics với statistics
+            clustering_results_with_stats[algo_name] = {
+                **evaluation_results[algo_name],
+                'n_clusters': stats['n_clusters'],
+                'avg_cluster_size': stats['avg_cluster_size'],
+            }
+        
+        # Ghi kết quả vào CSV
+        logger.log_run(
+            sample_size=sample_size,
+            model_name=config.MODEL_NAME,
+            k_neighbors=config.K_NEIGHBORS,
+            leiden_resolution=config.LEIDEN_RESOLUTION,
+            louvain_resolution=config.LOUVAIN_RESOLUTION,
+            clustering_results=clustering_results_with_stats,
+            notes=f'Best algorithm: {best_algo}'
+        )
+        logger.print_summary()
+    
     print("\n" + "="*70)
     print("  PIPELINE COMPLETED SUCCESSFULLY!")
     print("  Results saved to 'results/' folder")
+    if log_results:
+        print(f"  Metrics logged to '{log_path}'")
     print("="*70)
     
     return {
@@ -238,7 +270,7 @@ if __name__ == "__main__":
         help='Load precomputed features + labels from cache and skip extraction'
     )
     parser.add_argument(
-        '--save-feature-cache',
+        '--save-feature-cache',   
         action='store_true',
         help='Save extracted features + labels to cache for later runs'
     )
@@ -248,6 +280,17 @@ if __name__ == "__main__":
         default=None,
         help='Path to feature cache file (.npz). Default: results/cache/features_<model>_<sample|full>.npz'
     )
+    parser.add_argument(
+        '--no-log',
+        action='store_true',
+        help='Disable logging results to CSV'
+    )
+    parser.add_argument(
+        '--log-path',
+        type=str,
+        default='results/results.csv',
+        help='Path to save results CSV (default: results/results.csv)'
+    )
     
     args = parser.parse_args()
     
@@ -256,5 +299,7 @@ if __name__ == "__main__":
         device=args.device,
         use_feature_cache=args.use_feature_cache,
         save_feature_cache_enabled=args.save_feature_cache,
-        feature_cache_path=args.feature_cache_path
+        feature_cache_path=args.feature_cache_path,
+        log_results=not args.no_log,
+        log_path=args.log_path
     )

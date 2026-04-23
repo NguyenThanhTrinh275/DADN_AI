@@ -2,8 +2,8 @@
 Module xây dựng đồ thị tương đồng từ feature vectors
 """
 import numpy as np
+from scipy.sparse import coo_matrix
 from sklearn.neighbors import kneighbors_graph
-from sklearn.metrics.pairwise import cosine_similarity
 import igraph as ig
 
 from src.config import config
@@ -34,28 +34,42 @@ def build_knn_graph(features, k=None, metric=None):
     print(f"Building {k}-NN graph with {metric} similarity...")
     print(f"Input: {features.shape[0]} nodes, {features.shape[1]} dimensions")
     
-    # Tạo k-NN adjacency matrix
-    adj_matrix = kneighbors_graph(
+    # Tạo k-NN graph theo distance, sau đó chuyển thành similarity làm edge weight
+    dist_matrix = kneighbors_graph(
         features, 
         n_neighbors=k,
-        mode='connectivity',
+        mode='distance',
         metric=metric,
         include_self=False
     )
-    
-    # Chuyển thành symmetric (undirected graph)
-    adj_matrix = adj_matrix + adj_matrix.T
-    adj_matrix[adj_matrix > 1] = 1
-    
-    # Tạo igraph từ adjacency matrix
-    sources, targets = adj_matrix.nonzero()
-    edges = list(zip(sources, targets))
-    
+
+    dist_matrix = dist_matrix.tocoo()
+    if metric == 'cosine':
+        # cosine distance trong [0, 2], similarity = 1 - distance
+        similarities = 1.0 - dist_matrix.data
+    else:
+        # Chuyển distance sang similarity dương
+        similarities = 1.0 / (1.0 + dist_matrix.data)
+
+    weighted = coo_matrix((similarities, (dist_matrix.row, dist_matrix.col)), shape=dist_matrix.shape)
+    weighted = weighted.maximum(weighted.T).tocoo()
+
+    mask = weighted.row != weighted.col
+    sources = weighted.row[mask]
+    targets = weighted.col[mask]
+    weights = weighted.data[mask]
+
+    edges = list(zip(sources.tolist(), targets.tolist()))
     g = ig.Graph(n=features.shape[0], edges=edges, directed=False)
-    g.simplify()  # Loại bỏ self-loops và multiple edges
+    g.es['weight'] = weights.tolist()
+
+    g.simplify(combine_edges='max')  # Gộp cạnh trùng, giữ similarity lớn hơn
     
     print(f"Graph created: {g.vcount()} nodes, {g.ecount()} edges")
     print(f"Average degree: {np.mean(g.degree()):.2f}")
+    if g.ecount() > 0:
+        edge_weights = np.array(g.es['weight'])
+        print(f"Edge weight range: [{edge_weights.min():.4f}, {edge_weights.max():.4f}]")
     
     return g
 
@@ -72,44 +86,7 @@ def build_weighted_knn_graph(features, k=None, metric=None):
     Returns:
         igraph.Graph với edge weights
     """
-    if k is None:
-        k = config.K_NEIGHBORS
-    if metric is None:
-        metric = config.SIMILARITY_METRIC
-    
-    print(f"Building weighted {k}-NN graph with {metric} similarity...")
-    
-    # Tính similarity matrix
-    if metric == 'cosine':
-        sim_matrix = cosine_similarity(features)
-    else:
-        from sklearn.metrics.pairwise import euclidean_distances
-        dist_matrix = euclidean_distances(features)
-        # Chuyển distance thành similarity
-        sim_matrix = 1 / (1 + dist_matrix)
-    
-    # Tạo k-NN graph từ similarity
-    edges = []
-    weights = []
-    
-    for i in range(len(features)):
-        # Lấy k láng giềng gần nhất (không bao gồm chính nó)
-        similarities = sim_matrix[i].copy()
-        similarities[i] = -np.inf  # Loại bỏ self-loop
-        
-        top_k_indices = np.argsort(similarities)[-k:]
-        
-        for j in top_k_indices:
-            if j > i:  # Tránh duplicate edges
-                edges.append((i, j))
-                weights.append(similarities[j])
-    
-    g = ig.Graph(n=len(features), edges=edges, directed=False)
-    g.es['weight'] = weights
-    
-    print(f"Weighted graph: {g.vcount()} nodes, {g.ecount()} edges")
-    
-    return g
+    return build_knn_graph(features, k=k, metric=metric)
 
 
 def get_graph_statistics(graph):

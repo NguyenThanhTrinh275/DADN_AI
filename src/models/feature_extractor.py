@@ -4,6 +4,7 @@ Module trích xuất đặc trưng từ ảnh sử dụng pre-trained CNN
 import numpy as np
 import torch
 import torch.nn as nn
+from sklearn.preprocessing import normalize
 from torchvision import models, transforms
 from tqdm import tqdm
 
@@ -104,7 +105,6 @@ class FeatureExtractor:
 
         elif self.model_name == 'dinov2_vits14':
             try:
-                # DINOv2 backbone từ torch.hub (facebookresearch/dinov2)
                 model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
             except Exception as exc:
                 raise RuntimeError(
@@ -168,7 +168,9 @@ class FeatureExtractor:
                 
                 features.append(batch_features)
         
-        return np.vstack(features)
+        features = np.vstack(features)
+        features = normalize(features, norm='l2')
+        return features
     
     def __repr__(self):
         return f"FeatureExtractor(model={self.model_name}, device={self.device}, dim={self.feature_dim})"

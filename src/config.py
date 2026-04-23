@@ -1,10 +1,6 @@
-"""
-Cấu hình và tham số cho dự án
-"""
 import torch
 
 class Config:
-    # Đường dẫn dữ liệu
     DATA_PATH = 'data'
     RESULTS_PATH = 'results'
     
@@ -14,15 +10,15 @@ class Config:
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     
     # Graph Construction
-    K_NEIGHBORS = 10  # Số láng giềng cho k-NN graph
+    K_NEIGHBORS = 3  # Số láng giềng cho k-NN graph
     SIMILARITY_METRIC = 'cosine'  # 'cosine' hoặc 'euclidean'
     
     # Clustering
-    LEIDEN_RESOLUTION = 1.0
-    LOUVAIN_RESOLUTION = 1.0
+    LEIDEN_RESOLUTION = 130.0   
+    LOUVAIN_RESOLUTION = 130.0 
     
     # Misc
-    SAMPLE_SIZE = None  # None = toàn bộ, số nguyên để test nhanh
+    SAMPLE_SIZE = None
     RANDOM_STATE = 42
 
 config = Config()

@@ -1,6 +1,7 @@
 """
 Module tải và tiền xử lý dữ liệu
 """
+import argparse
 import pandas as pd
 import numpy as np
 import glob
@@ -106,3 +107,75 @@ def get_english_labels(df):
     return df['english_label'].apply(
         lambda x: x[0] if hasattr(x, '__len__') else x
     ).values
+
+
+def _build_arg_parser():
+    """Tạo parser cho chế độ chạy trực tiếp module data_loader"""
+    parser = argparse.ArgumentParser(
+        description='Test riêng module data_loader'
+    )
+    parser.add_argument(
+        '--path',
+        type=str,
+        default=None,
+        help='Đường dẫn thư mục chứa parquet (mặc định: config.DATA_PATH)'
+    )
+    parser.add_argument(
+        '--sample',
+        type=int,
+        default=10,
+        help='Số lượng mẫu để test nhanh (mặc định: 10)'
+    )
+    parser.add_argument(
+        '--multilabel',
+        action='store_true',
+        help='Trả về và in thống kê true label sets'
+    )
+    return parser
+
+
+def _run_self_test(path=None, sample_size=10, return_multilabel=False):
+    """Chạy smoke test cho module data_loader"""
+    print("=" * 60)
+    print("DATA LOADER SELF-TEST")
+    print("=" * 60)
+    print(f"Input path: {path or config.DATA_PATH}")
+    print(f"Sample size: {sample_size}")
+    print(f"Return multilabel: {return_multilabel}")
+
+    df = load_data(path=path, sample_size=sample_size)
+
+    if return_multilabel:
+        images, labels, label_sets = extract_images_and_labels(df, return_multilabel=True)
+    else:
+        images, labels = extract_images_and_labels(df, return_multilabel=False)
+        label_sets = None
+
+    print("\nBasic checks:")
+    print(f"  - n_rows(df): {len(df)}")
+    print(f"  - n_images:   {len(images)}")
+    print(f"  - n_labels:   {len(labels)}")
+    print(f"  - image/label aligned: {len(images) == len(labels)}")
+
+    if images:
+        print(f"  - first image bytes length: {len(images[0])}")
+
+    if len(labels) > 0:
+        print(f"  - unique labels (primary): {len(np.unique(labels))}")
+        preview_count = min(5, len(labels))
+        print(f"  - first {preview_count} primary labels: {labels[:preview_count].tolist()}")
+
+    if label_sets is not None:
+        preview_count = min(5, len(label_sets))
+        print(f"  - first {preview_count} label sets: {[sorted(list(s)) for s in label_sets[:preview_count]]}")
+
+    print("\nSelf-test completed.")
+
+
+if __name__ == '__main__':
+    args = _build_arg_parser().parse_args()
+    _run_self_test(
+        path=args.path,
+        sample_size=args.sample,
+        return_multilabel=args.multilabel,
+    )
