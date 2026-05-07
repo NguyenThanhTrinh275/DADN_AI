@@ -19,39 +19,50 @@
 DADN_TTNT/
 │
 ├── main.py                      # Entry point - Pipeline chính
+├── tune_params.py               # Script tuning tham số
 ├── requirements.txt             # Dependencies
 ├── README.md
 │
 ├── src/                         # Source code
 │   ├── __init__.py
-│   ├── config.py               # Cấu hình trung tâm
+│   ├── config.py                # Cấu hình trung tâm
 │   │
-│   ├── models/                 # Core algorithms
+│   ├── models/                  # Core algorithms
 │   │   ├── __init__.py
-│   │   ├── feature_extractor.py   # EfficientNet feature extraction
-│   │   ├── graph_builder.py       # k-NN graph construction
+│   │   ├── feature_extractor.py   # Trích xuất đặc trưng (EfficientNet, DINOv2...)
+│   │   ├── graph_builder.py       # Xây dựng đồ thị k-NN
 │   │   └── clustering.py          # 4 thuật toán phân cụm
 │   │
-│   └── utils/                  # Utilities
+│   └── utils/                   # Utilities
 │       ├── __init__.py
-│       ├── data_loader.py     # Load & preprocess data
-│       ├── evaluation.py      # Metrics (NMI, ARI, Purity...)
-│       └── visualization.py   # Charts & plots
+│       ├── data_loader.py        # Load & tiền xử lý dữ liệu
+│       ├── evaluation.py         # Metrics (NMI, ARI, Purity...)
+│       ├── feature_cache.py      # Lưu/tải feature cache
+│       ├── result_logger.py      # Lưu kết quả
+│       └── visualization.py      # Vẽ biểu đồ, trực quan hóa
 │
-├── data/                       # Dataset ImageNet-Hard
-│   └── *.parquet              # Parquet files
+├── data/                        # Dataset ImageNet-Hard (.parquet)
+│   ├── validation-0.parquet
+│   ├── ...
 │
-├── results/                    # Output
-│   ├── comparison.png         # Metrics comparison
-│   ├── radar_chart.png        # Radar chart
-│   ├── clusters.png           # Cluster visualization
-│   └── cluster_distribution.png
+├── results/                     # Output & cache
+│   ├── results.csv
+│   ├── tuning_results.csv
+│   ├── comparison.png
+│   ├── radar_chart.png
+│   ├── clusters.png
+│   ├── cluster_distribution.png
+│   └── cache/
+│       └── features_dinov2_vits14_full.npz
 │
-├── docs/                      # Documentation
-│   ├── PIPELINE_DETAIL.md     # Chi tiết pipeline
-│   └── FINETUNING_GUIDE.md    # Hướng dẫn fine-tuning
+├── docs/                        # Documentation
+│   ├── PIPELINE_DETAIL.md       # Chi tiết pipeline
+│   ├── FINETUNING_GUIDE.md      # Hướng dẫn fine-tuning
+│   └── LOGGING_GUIDE.md         # Hướng dẫn logging
 │
-└── notebooks/                 # Jupyter notebooks cho experiments
+└── notebooks/                   # Jupyter notebooks cho experiments
+    ├── EDA.ipynb
+    └── image_size_analysis.ipynb
 ```
 
 ## Các thuật toán được implement

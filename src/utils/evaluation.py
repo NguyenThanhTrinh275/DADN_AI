@@ -1,6 +1,3 @@
-"""
-Module đánh giá chất lượng phân cụm
-"""
 import numpy as np
 from collections import Counter
 from sklearn.metrics import (
@@ -183,7 +180,7 @@ def evaluate_clustering(true_labels, pred_labels, graph=None):
     if _is_multilabel_array(true_labels):
         true_label_sets = _to_label_sets(true_labels)
         true_labels_single = _to_single_labels_from_sets(true_label_sets)
-        purity = compute_purity(true_labels_single, pred_labels)
+        purity = compute_relaxed_purity(true_label_sets, pred_labels)
         nmi = compute_nmi(true_labels_single, pred_labels)
         ari = compute_ari(true_labels_single, pred_labels)
     else:

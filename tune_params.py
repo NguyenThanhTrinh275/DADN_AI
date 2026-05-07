@@ -51,21 +51,17 @@ import numpy as np
 
 warnings.filterwarnings("ignore")
 
-# ── Import từ src ──────────────────────────────────────────────────────────────
 from src.config import config
 from src.utils.feature_cache import load_feature_cache
 from src.models.graph_builder import build_knn_graph
 from src.models.clustering import cluster_leiden, cluster_louvain
 from src.utils.evaluation import evaluate_clustering, get_cluster_statistics
 
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CONSTANTS
-# ══════════════════════════════════════════════════════════════════════════════
+N_TARGET_CLASSES = 830
 
 # Không gian tham số Phase 1 (Coarse)
-COARSE_K_VALUES          = [5, 10, 15, 20, 25, 30]
-COARSE_RESOLUTION_VALUES = [1.0, 5.0, 10.0, 20.0, 30.0, 50.0, 80.0, 100.0]
+COARSE_K_VALUES          = [3, 5, 10, 15, 20, 25, 30]
+COARSE_RESOLUTION_VALUES = [1.0, 5.0, 10.0, 20.0, 30.0, 50.0, 80.0, 100.0, 120.0, 150.0, 200.0]
 
 # Trọng số Composite Score
 WEIGHT_NMI        = 0.4
@@ -98,15 +94,12 @@ CSV_FIELDNAMES = [
 def composite_score(nmi: float, ari: float, purity: float, modularity: float) -> float:
     """Tính Composite Score từ 4 metrics."""
     # Clamp để tránh NaN/âm ảnh hưởng
-    nmi        = max(nmi, 0.0)
-    ari        = max(ari, 0.0)
-    purity     = max(purity, 0.0)
+    nmi = max(nmi, 0.0)
+    ari = max(ari, 0.0)
+    purity = max(purity, 0.0)
     modularity = max(modularity, 0.0)
     return (
-        WEIGHT_NMI        * nmi
-        + WEIGHT_ARI        * ari
-        + WEIGHT_PURITY     * purity
-        + WEIGHT_MODULARITY * modularity
+        WEIGHT_NMI * nmi + WEIGHT_ARI * ari + WEIGHT_PURITY * purity + WEIGHT_MODULARITY * modularity
     )
 
 
@@ -314,10 +307,6 @@ def run_fine_search(
     return all_rows
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# REPORT: TOP-N CONFIGURATIONS
-# ══════════════════════════════════════════════════════════════════════════════
-
 def print_report(all_rows: list[dict], top_n: int = 5) -> None:
     """In báo cáo top-N bộ tham số tốt nhất theo Composite Score."""
     if not all_rows:
@@ -414,6 +403,15 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
+        "--model",
+        type=str,
+        default=None,
+        choices=["efficientnet_v2_l", "efficientnet_v2_m", "efficientnet_v2_s",
+                 "efficientnet_b7", "resnet50", "dinov2_vits14"],
+        help="Tên model để tự resolve cache path và output CSV. "
+             "Nếu cung cấp, --cache-path và --output sẽ được tự động đặt theo model.",
+    )
+    parser.add_argument(
         "--cache-path",
         type=str,
         default=None,
@@ -422,8 +420,8 @@ def main():
     parser.add_argument(
         "--output", "-o",
         type=str,
-        default="results/tuning_results.csv",
-        help="File CSV lưu kết quả tuning (mặc định: results/tuning_results.csv)",
+        default=None,
+        help="File CSV lưu kết quả tuning (mặc định: results/tuning_<model>.csv hoặc results/tuning_results.csv)",
     )
     parser.add_argument(
         "--phase",
@@ -441,13 +439,24 @@ def main():
 
     args = parser.parse_args()
 
+    # ── Xác định model name (ưu tiên --model, fallback về config) ─────────────
+    model_name = args.model if args.model else config.MODEL_NAME
+
     # ── Xác định đường dẫn cache ──────────────────────────────────────────────
-    if args.cache_path is None:
-        cache_path = os.path.join(
-            config.RESULTS_PATH, "cache", f"features_{config.MODEL_NAME}_full.npz"
-        )
-    else:
+    if args.cache_path is not None:
         cache_path = args.cache_path
+    else:
+        cache_path = os.path.join(
+            config.RESULTS_PATH, "cache", f"features_{model_name}_full.npz"
+        )
+
+    # ── Xác định output CSV ───────────────────────────────────────────────────
+    if args.output is not None:
+        output_csv = args.output
+    elif args.model:
+        output_csv = f"results/tuning_{args.model}.csv"
+    else:
+        output_csv = "results/tuning_results.csv"
 
     # ── Kiểm tra cache ────────────────────────────────────────────────────────
     if not os.path.exists(cache_path):
@@ -458,8 +467,9 @@ def main():
     print("=" * 70)
     print("  HYPERPARAMETER TUNING: k (k-NN) & Resolution (Leiden / Louvain)")
     print("  Dataset: ImageNet-Hard (full)")
+    print(f"  Model        : {model_name}")
     print(f"  Feature cache: {cache_path}")
-    print(f"  Output CSV   : {args.output}")
+    print(f"  Output CSV   : {output_csv}")
     print("=" * 70)
 
     # ── Load features ─────────────────────────────────────────────────────────
@@ -471,38 +481,38 @@ def main():
     print(f"  ✓ N samples     : {len(true_label_sets)}")
 
     # ── Chuẩn bị CSV ─────────────────────────────────────────────────────────
-    ensure_csv_header(args.output)
+    ensure_csv_header(output_csv)
 
     all_rows: list[dict] = []
 
     # ── Phase 1 ───────────────────────────────────────────────────────────────
     if args.phase is None or args.phase == 1:
-        coarse_rows = run_coarse_search(features, true_label_sets, args.output)
+        coarse_rows = run_coarse_search(features, true_label_sets, output_csv)
         all_rows.extend(coarse_rows)
     else:
         # Phase 2 only: load Phase 1 results từ CSV
         print("\n[INFO] Đọc kết quả Phase 1 từ CSV để thực hiện Fine-Tuning...")
-        existing = load_existing_csv(args.output)
+        existing = load_existing_csv(output_csv)
         coarse_rows = [r for r in existing if r.get("phase") == "coarse"]
         if not coarse_rows:
             print("[ERROR] Không tìm thấy kết quả Phase 1 (coarse) trong CSV.")
             print("  → Hãy chạy Phase 1 trước: python tune_params.py --phase 1")
             sys.exit(1)
-        print(f"  ✓ Đã đọc {len(coarse_rows)} dòng Phase 1 từ {args.output}")
+        print(f"  ✓ Đã đọc {len(coarse_rows)} dòng Phase 1 từ {output_csv}")
 
     # ── Phase 2 ───────────────────────────────────────────────────────────────
     if args.phase is None or args.phase == 2:
-        fine_rows = run_fine_search(features, true_label_sets, coarse_rows, args.output)
+        fine_rows = run_fine_search(features, true_label_sets, coarse_rows, output_csv)
         all_rows.extend(fine_rows)
 
     # ── Nếu chỉ đọc CSV (phase 2 only), gộp tất cả để report ─────────────────
     if not all_rows:
-        all_rows = load_existing_csv(args.output)
+        all_rows = load_existing_csv(output_csv)
 
     # ── Báo cáo ───────────────────────────────────────────────────────────────
     print_report(all_rows, top_n=args.top)
 
-    print(f"\n✓ Toàn bộ kết quả đã lưu tại: {args.output}")
+    print(f"\n✓ Toàn bộ kết quả đã lưu tại: {output_csv}")
     print("✓ Tuning hoàn thành!\n")
 
 

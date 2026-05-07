@@ -140,6 +140,7 @@ def visualize_clusters(images, labels, n_samples=5, n_clusters=10, save_path=Non
         cluster_indices = np.where(labels == cluster_id)[0]
         cluster_size = len(cluster_indices)
         
+        np.random.seed(config.RANDOM_STATE)
         sample_indices = np.random.choice(
             cluster_indices,
             size=min(n_samples, cluster_size),

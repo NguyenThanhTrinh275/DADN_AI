@@ -84,8 +84,8 @@ def extract_images_and_labels(df, return_multilabel=False):
 
     normalized_labels = df['label'].apply(_normalize_label_values)
 
-    # Giữ hành vi cũ cho pipeline hiện tại: dùng nhãn đầu tiên làm nhãn chính
-    labels = normalized_labels.apply(lambda values: values[0]).values
+    # Dùng nhãn nhỏ nhất (sorted) để primary label luôn deterministic
+    labels = normalized_labels.apply(lambda values: sorted(values)[0]).values
 
     label_sets = normalized_labels.apply(set).tolist()
     multi_label_count = sum(1 for label_set in label_sets if len(label_set) > 1)

@@ -1,22 +1,8 @@
-"""
-Community Structure Identification cho bài toán phân cụm hình ảnh
-Dataset: ImageNet-Hard
-Algorithms: Infomap, Leiden, Louvain, Label Propagation (LPA)
-
-Pipeline:
-1. Load Data (Parquet) → Ảnh bytes
-2. Feature Extraction (EfficientNet) → Vector cao chiều  
-3. Build Graph (k-NN + Cosine Similarity) → Đồ thị cộng đồng
-4. Community Detection (4 thuật toán) → Cluster labels
-5. Evaluate & Compare với Ground Truth → NMI, Purity, ARI, Modularity
-"""
-
 import argparse
 import os
 import warnings
 warnings.filterwarnings('ignore')
 
-# Import các module từ src package
 from src.config import config
 from src.utils.data_loader import load_data, extract_images_and_labels
 from src.models.feature_extractor import FeatureExtractor
@@ -33,7 +19,7 @@ from src.utils.visualization import (
 from src.utils.result_logger import ResultLogger
 
 
-def _default_cache_path(sample_size):
+def default_cache_path(sample_size):
     sample_tag = f"sample{sample_size}" if sample_size is not None else "full"
     return os.path.join(
         config.RESULTS_PATH,
@@ -51,9 +37,9 @@ def main(
     log_results=True,
     log_path='results/results.csv'
 ):
+    
     """
     Pipeline chính cho Community Structure Identification
-    
     Args:
         sample_size: Số lượng mẫu (None = toàn bộ dataset)
         device: Thiết bị chạy feature extraction ('auto', 'cpu', 'gpu')
@@ -64,7 +50,7 @@ def main(
         log_path: Đường dẫn file CSV để lưu kết quả
     """
     if feature_cache_path is None:
-        feature_cache_path = _default_cache_path(sample_size)
+        feature_cache_path = default_cache_path(sample_size)
 
     print("="*70)
     print("  COMMUNITY STRUCTURE IDENTIFICATION FOR IMAGE CLUSTERING")
@@ -111,7 +97,7 @@ def main(
         # STEP 2: TRÍCH XUẤT ĐẶC TRƯNG
         # =========================================================
         print("\n" + "="*50)
-        print("[STEP 2/5] Extracting features using EfficientNet...")
+        print("[STEP 2/5] Extracting features...")
         print("="*50)
 
         extractor = FeatureExtractor(device=device)

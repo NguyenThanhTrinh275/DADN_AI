@@ -45,8 +45,8 @@ def build_knn_graph(features, k=None, metric=None):
 
     dist_matrix = dist_matrix.tocoo()
     if metric == 'cosine':
-        # cosine distance trong [0, 2], similarity = 1 - distance
-        similarities = 1.0 - dist_matrix.data
+        # cosine distance trong [0, 2], similarity = 1 - distance; clip về [0, 1] để tránh weight âm
+        similarities = np.clip(1.0 - dist_matrix.data, 0.0, 1.0)
     else:
         # Chuyển distance sang similarity dương
         similarities = 1.0 / (1.0 + dist_matrix.data)

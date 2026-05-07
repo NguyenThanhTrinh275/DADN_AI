@@ -7,6 +7,7 @@ Bao gồm 4 thuật toán:
 3. Louvain - Tối ưu hóa modularity
 4. LPA - Label Propagation Algorithm
 """
+import random
 import numpy as np
 import leidenalg
 
@@ -56,7 +57,7 @@ def cluster_infomap(graph):
         
         im.run()
         
-        # Lấy kết quả phân cụm
+        # Lấy kết quả phân cụm (module_id bắt đầu từ 1 trong infomap package)
         labels = np.zeros(graph.vcount(), dtype=int)
         for node in im.tree:
             if node.is_leaf:
@@ -67,6 +68,11 @@ def cluster_infomap(graph):
         communities = graph.community_infomap(edge_weights=weights)
         labels = np.array(communities.membership)
     
+    # Chuẩn hóa labels về 0-indexed (infomap package trả từ 1, igraph trả từ 0)
+    unique_ids = np.unique(labels)
+    id_map = {old: new for new, old in enumerate(sorted(unique_ids))}
+    labels = np.array([id_map[l] for l in labels])
+
     n_clusters = len(set(labels))
     print(f"  → Infomap: {n_clusters} clusters found")
     return labels
@@ -139,6 +145,8 @@ def cluster_louvain(graph, resolution=None):
     
     print(f"Running Louvain (resolution={resolution})...")
     
+    random.seed(config.RANDOM_STATE)
+    np.random.seed(config.RANDOM_STATE)
     communities = graph.community_multilevel(weights=weights, resolution=resolution)
     labels = np.array(communities.membership)
     
@@ -175,6 +183,8 @@ def cluster_lpa(graph):
     print("Running Label Propagation Algorithm (LPA)...")
     weights = _get_weights(graph)
 
+    random.seed(config.RANDOM_STATE)
+    np.random.seed(config.RANDOM_STATE)
     communities = graph.community_label_propagation(weights=weights)
     labels = np.array(communities.membership)
     

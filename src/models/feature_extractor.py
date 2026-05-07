@@ -23,18 +23,12 @@ class FeatureExtractor:
     
     Supported models:
     - efficientnet_v2_l (1280 dims) - Mạnh nhất
-    - efficientnet_v2_m (1280 dims)
-    - efficientnet_v2_s (1280 dims)
-    - efficientnet_b7 (2560 dims)
     - resnet50 (2048 dims)
     - dinov2_vits14 (384 dims)
     """
     
     SUPPORTED_MODELS = {
         'efficientnet_v2_l': {'input_size': 480, 'feature_dim': 1280},
-        'efficientnet_v2_m': {'input_size': 480, 'feature_dim': 1280},
-        'efficientnet_v2_s': {'input_size': 384, 'feature_dim': 1280},
-        'efficientnet_b7': {'input_size': 600, 'feature_dim': 2560},
         'resnet50': {'input_size': 224, 'feature_dim': 2048},
         'dinov2_vits14': {'input_size': 224, 'feature_dim': 384},
     }
@@ -85,18 +79,6 @@ class FeatureExtractor:
         
         if self.model_name == 'efficientnet_v2_l':
             model = models.efficientnet_v2_l(weights=models.EfficientNet_V2_L_Weights.DEFAULT)
-            model.classifier = nn.Identity()
-            
-        elif self.model_name == 'efficientnet_v2_m':
-            model = models.efficientnet_v2_m(weights=models.EfficientNet_V2_M_Weights.DEFAULT)
-            model.classifier = nn.Identity()
-            
-        elif self.model_name == 'efficientnet_v2_s':
-            model = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.DEFAULT)
-            model.classifier = nn.Identity()
-            
-        elif self.model_name == 'efficientnet_b7':
-            model = models.efficientnet_b7(weights=models.EfficientNet_B7_Weights.DEFAULT)
             model.classifier = nn.Identity()
             
         elif self.model_name == 'resnet50':
@@ -159,12 +141,8 @@ class FeatureExtractor:
                 ]).to(self.device)
                 
                 # Forward pass
-                batch_features = self.model(batch_tensors)
-                batch_features = batch_features.squeeze().cpu().numpy()
-                
-                # Xử lý trường hợp batch_size = 1
-                if len(batch_features.shape) == 1:
-                    batch_features = batch_features.reshape(1, -1)
+                batch_features = self.model(batch_tensors).cpu().numpy()
+                batch_features = batch_features.reshape(len(batch_images), -1)
                 
                 features.append(batch_features)
         
