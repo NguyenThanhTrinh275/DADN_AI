@@ -467,7 +467,7 @@ def main():
         type=str,
         default=None,
         choices=["efficientnet_v2_l", "efficientnet_v2_m", "efficientnet_v2_s",
-                 "efficientnet_b7", "resnet50", "dinov2_vits14"],
+                 "efficientnet_b7", "resnet50", "dinov2_vits14", "dinov2_vitb14", "dinov2_vitl14"],
         help="Tên model để tự resolve cache path và output CSV. "
              "Nếu cung cấp, --cache-path và --output sẽ được tự động đặt theo model.",
     )
