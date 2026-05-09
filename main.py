@@ -197,10 +197,41 @@ def main(
         key=lambda x: evaluation_results[x]['NMI']
     )
     print(f"\nVisualizing clusters from best algorithm: {best_algo}")
-    if images is not None:
-        visualize_clusters(images, clustering_results[best_algo])
+
+    viz_images = images
+    cluster_pick_mode = 'largest'
+
+    if viz_images is None and use_feature_cache:
+        print(
+            "Đang tải lại ảnh từ parquet để vẽ clusters.png "
+            "(cùng sample_size và DATA_PATH với lúc tạo cache)..."
+        )
+        try:
+            df_viz = load_data(sample_size=sample_size)
+            viz_images, _, _ = extract_images_and_labels(df_viz, return_multilabel=True)
+            if len(viz_images) != len(features):
+                print(
+                    f"[WARN] len(images)={len(viz_images)} != len(features)={len(features)}. "
+                    "Bỏ qua clusters.png — kiểm tra --sample và DATA_PATH khớp file cache."
+                )
+                viz_images = None
+            else:
+                cluster_pick_mode = 'random'
+        except FileNotFoundError as exc:
+            print(f"[WARN] Không đọc được parquet để vẽ clusters.png: {exc}")
+            viz_images = None
+
+    if viz_images is not None:
+        visualize_clusters(
+            viz_images,
+            clustering_results[best_algo],
+            cluster_pick=cluster_pick_mode,
+        )
     else:
-        print("Skip cluster image visualization vì đang chạy từ cache (không có image bytes).")
+        print(
+            "Skip cluster image visualization "
+            "(không có bytes ảnh hoặc parquet không khớp cache)."
+        )
     
     # =========================================================
     # LOGGING KẾT QUẢ VÀO CSV

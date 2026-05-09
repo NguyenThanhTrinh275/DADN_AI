@@ -107,7 +107,14 @@ def plot_radar_chart(results, save_path=None):
     print(f"Saved radar chart to {save_path}")
 
 
-def visualize_clusters(images, labels, n_samples=5, n_clusters=10, save_path=None):
+def visualize_clusters(
+    images,
+    labels,
+    n_samples=5,
+    n_clusters=10,
+    save_path=None,
+    cluster_pick='largest',
+):
     """
     Hiển thị mẫu ảnh từ mỗi cluster
     
@@ -117,6 +124,7 @@ def visualize_clusters(images, labels, n_samples=5, n_clusters=10, save_path=Non
         n_samples: Số ảnh mỗi cluster
         n_clusters: Số cluster tối đa hiển thị
         save_path: Đường dẫn lưu file
+        cluster_pick: 'largest' — các cluster đông nhất trước; 'random' — chọn ngẫu nhiên (seed RANDOM_STATE)
     """
     ensure_results_dir()
     
@@ -124,16 +132,21 @@ def visualize_clusters(images, labels, n_samples=5, n_clusters=10, save_path=Non
         save_path = os.path.join(config.RESULTS_PATH, 'clusters.png')
     
     unique_labels = np.unique(labels)
-    n_clusters = min(len(unique_labels), n_clusters)
+    k = min(len(unique_labels), n_clusters)
+
+    if cluster_pick == 'random':
+        rng = np.random.RandomState(config.RANDOM_STATE)
+        top_clusters = list(rng.choice(unique_labels, size=k, replace=False))
+        title_scope = f'Random {k} Clusters'
+    else:
+        cluster_sizes = [(c, np.sum(labels == c)) for c in unique_labels]
+        cluster_sizes.sort(key=lambda x: x[1], reverse=True)
+        top_clusters = [c[0] for c in cluster_sizes[:k]]
+        title_scope = f'Top {k} Clusters'
     
-    # Sắp xếp theo kích thước cluster (lớn nhất trước)
-    cluster_sizes = [(c, np.sum(labels == c)) for c in unique_labels]
-    cluster_sizes.sort(key=lambda x: x[1], reverse=True)
-    top_clusters = [c[0] for c in cluster_sizes[:n_clusters]]
+    fig, axes = plt.subplots(k, n_samples, figsize=(3*n_samples, 3*k))
     
-    fig, axes = plt.subplots(n_clusters, n_samples, figsize=(3*n_samples, 3*n_clusters))
-    
-    if n_clusters == 1:
+    if k == 1:
         axes = axes.reshape(1, -1)
     
     for i, cluster_id in enumerate(top_clusters):
@@ -158,7 +171,7 @@ def visualize_clusters(images, labels, n_samples=5, n_clusters=10, save_path=Non
         axes[i, 0].set_title(f'Cluster {cluster_id}\n(n={cluster_size})', 
                             fontsize=10, loc='left')
     
-    plt.suptitle(f'Sample Images from Top {n_clusters} Clusters', 
+    plt.suptitle(f'Sample Images from {title_scope}',
                 fontsize=14, fontweight='bold', y=1.02)
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
