@@ -9,6 +9,7 @@ from src.models.feature_extractor import FeatureExtractor
 from src.models.graph_builder import build_knn_graph, get_graph_statistics
 from src.models.clustering import run_all_algorithms
 from src.utils.feature_cache import save_feature_cache, load_feature_cache
+from src.utils.feature_postprocess import pca_whiten
 from src.utils.evaluation import evaluate_all_algorithms, print_evaluation_results, get_cluster_statistics
 from src.utils.visualization import (
     plot_metrics_comparison,
@@ -101,9 +102,18 @@ def main(
         print("="*50)
 
         extractor = FeatureExtractor(device=device)
-        features = extractor.extract_features(images)
+        if config.USE_TTA:
+            print(f"  Sử dụng TTA: scales={config.TTA_SCALES}, flips={config.TTA_FLIPS}")
+            features = extractor.extract_features_tta(
+                images,
+                scales=config.TTA_SCALES,
+                flips=config.TTA_FLIPS,
+            )
+        else:
+            features = extractor.extract_features(images)
         print(f"Feature matrix shape: {features.shape}")
 
+        # Cache lưu features RAW (chưa PCA) để có thể đổi PCA_DIM mà không cần re-extract
         if save_feature_cache_enabled:
             cache_metadata = {
                 'model_name': extractor.model_name,
@@ -111,10 +121,18 @@ def main(
                 'sample_size': sample_size,
                 'feature_dim': int(features.shape[1]) if features.ndim == 2 else None,
                 'n_samples': int(features.shape[0]),
+                'tta_scales': list(config.TTA_SCALES) if config.USE_TTA else None,
+                'tta_flips':  list(config.TTA_FLIPS)  if config.USE_TTA else None,
             }
             save_feature_cache(feature_cache_path, features, true_label_sets, cache_metadata)
             print(f"Saved feature cache to: {feature_cache_path}")
-    
+
+    # PCA whitening áp dụng cho cả cached lẫn freshly-extracted features
+    if config.USE_PCA_WHITEN:
+        print("\n  Áp dụng PCA whitening...")
+        features = pca_whiten(features, n_components=config.PCA_DIM, random_state=config.RANDOM_STATE)
+        print(f"  Sau PCA whitening: {features.shape}")
+
     # =========================================================
     # STEP 3: XÂY DỰNG ĐỒ THỊ
     # =========================================================

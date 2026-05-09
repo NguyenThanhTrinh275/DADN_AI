@@ -29,8 +29,10 @@ class FeatureExtractor:
     
     SUPPORTED_MODELS = {
         'efficientnet_v2_l': {'input_size': 480, 'feature_dim': 1280},
-        'resnet50': {'input_size': 224, 'feature_dim': 2048},
-        'dinov2_vits14': {'input_size': 224, 'feature_dim': 384},
+        'resnet50':          {'input_size': 224, 'feature_dim': 2048},
+        'dinov2_vits14':     {'input_size': 518, 'feature_dim': 384},
+        'dinov2_vitb14':     {'input_size': 518, 'feature_dim': 768},
+        'dinov2_vitl14':     {'input_size': 518, 'feature_dim': 1024},
     }
 
     @staticmethod
@@ -85,9 +87,9 @@ class FeatureExtractor:
             model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
             model = nn.Sequential(*list(model.children())[:-1])
 
-        elif self.model_name == 'dinov2_vits14':
+        elif self.model_name in ('dinov2_vits14', 'dinov2_vitb14', 'dinov2_vitl14'):
             try:
-                model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14')
+                model = torch.hub.load('facebookresearch/dinov2', self.model_name)
             except Exception as exc:
                 raise RuntimeError(
                     "Không tải được DINOv2 từ torch.hub. "
@@ -104,16 +106,25 @@ class FeatureExtractor:
         return model
     
     def _create_transform(self):
-        """Tạo transform pipeline cho ảnh"""
-        return transforms.Compose([
-            transforms.Resize(self.input_size + 32),
-            transforms.CenterCrop(self.input_size),
+        """Transform mặc định (single-pass)"""
+        return self._build_transform(self.input_size, flip=False)
+
+    def _build_transform(self, size, flip=False):
+        """Build transform với size và flip tùy chọn (dùng cho TTA)"""
+        ops = [
+            transforms.Resize(size + 32, interpolation=transforms.InterpolationMode.BICUBIC),
+            transforms.CenterCrop(size),
+        ]
+        if flip:
+            ops.append(transforms.RandomHorizontalFlip(p=1.0))
+        ops += [
             transforms.ToTensor(),
             transforms.Normalize(
                 mean=[0.485, 0.456, 0.406],
                 std=[0.229, 0.224, 0.225]
-            )
-        ])
+            ),
+        ]
+        return transforms.Compose(ops)
     
     def extract_features(self, images, batch_size=None):
         """
@@ -131,24 +142,63 @@ class FeatureExtractor:
         
         features = []
         
+        use_amp = self.device == 'cuda'
+
         with torch.no_grad():
             for i in tqdm(range(0, len(images), batch_size), desc="Extracting features"):
                 batch_images = images[i:i+batch_size]
-                
-                # Chuyển đổi và stack thành batch
+
                 batch_tensors = torch.stack([
                     self.transform(bytes_to_image(img)) for img in batch_images
                 ]).to(self.device)
-                
-                # Forward pass
-                batch_features = self.model(batch_tensors).cpu().numpy()
-                batch_features = batch_features.reshape(len(batch_images), -1)
-                
+
+                if use_amp:
+                    with torch.cuda.amp.autocast(dtype=torch.float16):
+                        out = self.model(batch_tensors)
+                    out = out.float()
+                else:
+                    out = self.model(batch_tensors)
+
+                batch_features = out.cpu().numpy().reshape(len(batch_images), -1)
                 features.append(batch_features)
         
         features = np.vstack(features)
         features = normalize(features, norm='l2')
         return features
     
+    def extract_features_tta(self, images, scales=None, flips=(False, True), batch_size=None):
+        """
+        Trích xuất features với Test-Time Augmentation (TTA).
+
+        Lấy trung bình features qua nhiều biến thể (multi-scale + hflip),
+        sau đó L2-normalize. Tăng độ ổn định và accuracy clustering.
+
+        Args:
+            images: List bytes ảnh
+            scales: Tuple kích thước input (mặc định = (input_size,))
+            flips: Tuple (False, True) để bật/tắt horizontal flip
+            batch_size: Batch size khi extract
+
+        Returns:
+            numpy array (n_samples, feature_dim) đã L2-normalize
+        """
+        if scales is None:
+            scales = (self.input_size,)
+
+        original_transform = self.transform
+        all_feats = []
+        try:
+            for s in scales:
+                for flip in flips:
+                    print(f"  TTA pass: scale={s}, flip={flip}")
+                    self.transform = self._build_transform(s, flip=flip)
+                    feats = self.extract_features(images, batch_size=batch_size)
+                    all_feats.append(feats)
+        finally:
+            self.transform = original_transform
+
+        mean_feats = np.mean(np.stack(all_feats, axis=0), axis=0)
+        return normalize(mean_feats, norm='l2')
+
     def __repr__(self):
         return f"FeatureExtractor(model={self.model_name}, device={self.device}, dim={self.feature_dim})"

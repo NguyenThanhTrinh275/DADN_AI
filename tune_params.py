@@ -33,8 +33,8 @@ Cách dùng:
     # Chọn file output riêng
     python tune_params.py --output results/tuning_results.csv
 
-Metric tổng hợp (Composite Score):
-    Score = 0.30 × NMI + 0.25 × ARI + 0.20 × Accuracy + 0.15 × Purity + 0.10 × Modularity
+Metric tổng hợp (Composite Score) — ưu tiên Accuracy:
+    Score = 0.50 × Accuracy + 0.20 × NMI + 0.15 × ARI + 0.10 × Purity + 0.05 × Modularity
 """
 
 import argparse
@@ -53,6 +53,7 @@ warnings.filterwarnings("ignore")
 
 from src.config import config
 from src.utils.feature_cache import load_feature_cache
+from src.utils.feature_postprocess import pca_whiten
 from src.models.graph_builder import build_knn_graph
 from src.models.clustering import cluster_leiden, cluster_louvain
 from src.utils.evaluation import evaluate_clustering, get_cluster_statistics
@@ -60,15 +61,16 @@ from src.utils.evaluation import evaluate_clustering, get_cluster_statistics
 N_TARGET_CLASSES = 830
 
 # Không gian tham số Phase 1 (Coarse)
-COARSE_K_VALUES          = [3, 5, 10, 15, 20, 25, 30]
-COARSE_RESOLUTION_VALUES = [1.0, 5.0, 10.0, 20.0, 30.0, 50.0, 80.0, 100.0, 120.0, 150.0, 200.0]
+# K cao + resolution thấp hơn để n_clusters bám sát N_TARGET_CLASSES = 830
+COARSE_K_VALUES          = [10, 15, 20, 25, 30]
+COARSE_RESOLUTION_VALUES = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 80.0]
 
-# Trọng số Composite Score
-WEIGHT_NMI        = 0.30
-WEIGHT_ARI        = 0.25
-WEIGHT_ACCURACY   = 0.20
-WEIGHT_PURITY     = 0.15
-WEIGHT_MODULARITY = 0.10
+# Trọng số Composite Score (ưu tiên Accuracy — mục tiêu chính của project)
+WEIGHT_ACCURACY   = 0.50
+WEIGHT_NMI        = 0.20
+WEIGHT_ARI        = 0.15
+WEIGHT_PURITY     = 0.10
+WEIGHT_MODULARITY = 0.05
 
 # Tên cột CSV output
 CSV_FIELDNAMES = [
@@ -357,33 +359,85 @@ def print_report(all_rows: list[dict], top_n: int = 5) -> None:
 
     print(sep)
 
-    best = top_rows[0]
-    print("\n  🏆 RECOMMENDATION:")
+    # ── Helpers cho ranking phụ ───────────────────────────────────────────────
+    def safe_acc(r):
+        try:
+            return float(r["accuracy"])
+        except (ValueError, TypeError, KeyError):
+            return -1.0
 
-    # Tìm best k chung và best resolution riêng theo thuật toán
+    def n_clusters_gap(r):
+        try:
+            return abs(int(r["n_clusters"]) - N_TARGET_CLASSES)
+        except (ValueError, TypeError):
+            return float("inf")
+
+    def print_top_block(title, rows_subset, key_fn, reverse=True):
+        print(f"\n  {title}")
+        print("-" * 110)
+        print(
+            f"  {'Rank':<5} {'Phase':<7} {'k':>4} {'Resolution':>11} {'Algorithm':<9} "
+            f"{'NMI':>7} {'ARI':>7} {'Acc':>7} {'Purity':>7} {'Mod':>7} {'Score':>7} {'Clusters':>9}"
+        )
+        sub = sorted(rows_subset, key=key_fn, reverse=reverse)[:top_n]
+        for rank, row in enumerate(sub, start=1):
+            nmi_v = float(row["nmi"])      if row["nmi"]      else float("nan")
+            ari_v = float(row["ari"])      if row["ari"]      else float("nan")
+            acc_v = float(row["accuracy"]) if row.get("accuracy") else float("nan")
+            pur_v = float(row["purity"])   if row["purity"]   else float("nan")
+            mod_v = float(row["modularity"]) if row["modularity"] else float("nan")
+            sc_v  = float(row["composite_score"]) if row["composite_score"] else float("nan")
+            print(
+                f"  {rank:<5} {row['phase']:<7} {int(row['k_neighbors']):>4} "
+                f"{float(row['resolution']):>11.1f} {row['algorithm']:<9} "
+                f"{nmi_v:>7.4f} {ari_v:>7.4f} {acc_v:>7.4f} {pur_v:>7.4f} {mod_v:>7.4f} "
+                f"{sc_v:>7.4f} {row['n_clusters']:>9}"
+            )
+
+    # ── Top theo Accuracy thuần (mục tiêu chính của project) ─────────────────
+    print_top_block(
+        f"TOP {top_n} BY ACCURACY (mục tiêu chính)",
+        all_rows,
+        key_fn=safe_acc,
+        reverse=True,
+    )
+
+    # ── Top theo |n_clusters - N_TARGET_CLASSES| ─────────────────────────────
+    print_top_block(
+        f"TOP {top_n} GẦN N_TARGET_CLASSES = {N_TARGET_CLASSES} (sắp xếp tăng theo gap)",
+        all_rows,
+        key_fn=n_clusters_gap,
+        reverse=False,
+    )
+
+    # ── Recommendation: ưu tiên ACCURACY ──────────────────────────────────────
     leiden_rows  = [r for r in all_rows if r["algorithm"] == "Leiden"]
     louvain_rows = [r for r in all_rows if r["algorithm"] == "Louvain"]
 
-    best_leiden  = max(leiden_rows,  key=safe_score) if leiden_rows  else None
-    best_louvain = max(louvain_rows, key=safe_score) if louvain_rows else None
+    best_acc          = max(all_rows,     key=safe_acc)
+    best_leiden_acc   = max(leiden_rows,  key=safe_acc) if leiden_rows  else None
+    best_louvain_acc  = max(louvain_rows, key=safe_acc) if louvain_rows else None
 
-    # Best k = k của bộ tham số overall tốt nhất
-    print(f"    Best k (KNN)              : {int(best['k_neighbors'])}")
-    if best_leiden:
-        print(f"    Best Resolution (Leiden)  : {float(best_leiden['resolution']):.1f}  "
-              f"→ Score={float(best_leiden['composite_score']):.4f}, "
-              f"NMI={float(best_leiden['nmi']):.4f}")
-    if best_louvain:
-        print(f"    Best Resolution (Louvain) : {float(best_louvain['resolution']):.1f}  "
-              f"→ Score={float(best_louvain['composite_score']):.4f}, "
-              f"NMI={float(best_louvain['nmi']):.4f}")
+    print("\n  🏆 RECOMMENDATION (ưu tiên Accuracy):")
+    print(f"    Best k (KNN)              : {int(best_acc['k_neighbors'])}  "
+          f"(Accuracy={safe_acc(best_acc):.4f}, n_clusters={best_acc['n_clusters']})")
+    if best_leiden_acc:
+        print(f"    Best Resolution (Leiden)  : {float(best_leiden_acc['resolution']):.1f}  "
+              f"→ Acc={safe_acc(best_leiden_acc):.4f}, "
+              f"NMI={float(best_leiden_acc['nmi']):.4f}, "
+              f"n_clusters={best_leiden_acc['n_clusters']}")
+    if best_louvain_acc:
+        print(f"    Best Resolution (Louvain) : {float(best_louvain_acc['resolution']):.1f}  "
+              f"→ Acc={safe_acc(best_louvain_acc):.4f}, "
+              f"NMI={float(best_louvain_acc['nmi']):.4f}, "
+              f"n_clusters={best_louvain_acc['n_clusters']}")
 
-    print(f"\n  Để áp dụng kết quả, cập nhật src/config.py:")
-    print(f"    K_NEIGHBORS       = {int(best['k_neighbors'])}")
-    if best_leiden:
-        print(f"    LEIDEN_RESOLUTION  = {float(best_leiden['resolution']):.1f}")
-    if best_louvain:
-        print(f"    LOUVAIN_RESOLUTION = {float(best_louvain['resolution']):.1f}")
+    print(f"\n  Để áp dụng, cập nhật src/config.py:")
+    print(f"    K_NEIGHBORS        = {int(best_acc['k_neighbors'])}")
+    if best_leiden_acc:
+        print(f"    LEIDEN_RESOLUTION  = {float(best_leiden_acc['resolution']):.1f}")
+    if best_louvain_acc:
+        print(f"    LOUVAIN_RESOLUTION = {float(best_louvain_acc['resolution']):.1f}")
     print(sep)
 
 
@@ -485,6 +539,16 @@ def main():
     true_label_sets = cache_data["true_label_sets"]
     print(f"  ✓ Features shape: {features.shape}")
     print(f"  ✓ N samples     : {len(true_label_sets)}")
+
+    # ── PCA whitening (giống main.py để kết quả tuning khớp với main pipeline) ─
+    if getattr(config, "USE_PCA_WHITEN", False):
+        print("\n[STEP 1.5] Áp dụng PCA whitening trên features...")
+        features = pca_whiten(
+            features,
+            n_components=config.PCA_DIM,
+            random_state=config.RANDOM_STATE,
+        )
+        print(f"  ✓ Features sau whitening: {features.shape}")
 
     # ── Chuẩn bị CSV ─────────────────────────────────────────────────────────
     ensure_csv_header(output_csv)
