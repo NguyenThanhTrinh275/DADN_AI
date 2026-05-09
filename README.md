@@ -10,78 +10,76 @@
 ## Mục tiêu
 
 - Áp dụng các thuật toán phân cụm cộng đồng cho bài toán phân cụm hình ảnh
-- Dataset: ImageNet-Hard
-- So sánh và tối ưu hóa ít nhất 4 thuật toán
+- Dataset: ImageNet-Hard (parquet: bytes ảnh + nhãn, có thể multi-label)
+- So sánh và tối ưu hóa ít nhất 4 thuật toán (Infomap, Leiden, Louvain, LPA)
 
 ## Cấu trúc dự án
 
 ```
 DADN_TTNT/
 │
-├── main.py                      # Entry point - Pipeline chính
-├── tune_params.py               # Script tuning tham số
-├── requirements.txt             # Dependencies
+├── main.py                      # Entry point — pipeline đầy đủ
+├── tune_params.py               # Grid search k và resolution (Leiden/Louvain), đọc feature cache
+├── scripts/
+│   └── extract_features_only.py # Chỉ extract + lưu .npz (GPU/Kaggle)
+├── requirements.txt
 ├── README.md
 │
-├── src/                         # Source code
-│   ├── __init__.py
-│   ├── config.py                # Cấu hình trung tâm
-│   │
-│   ├── models/                  # Core algorithms
-│   │   ├── __init__.py
-│   │   ├── feature_extractor.py   # Trích xuất đặc trưng (EfficientNet, DINOv2...)
-│   │   ├── graph_builder.py       # Xây dựng đồ thị k-NN
-│   │   └── clustering.py          # 4 thuật toán phân cụm
-│   │
-│   └── utils/                   # Utilities
-│       ├── __init__.py
-│       ├── data_loader.py        # Load & tiền xử lý dữ liệu
-│       ├── evaluation.py         # Metrics (NMI, ARI, Purity...)
-│       ├── feature_cache.py      # Lưu/tải feature cache
-│       ├── result_logger.py      # Lưu kết quả
-│       └── visualization.py      # Vẽ biểu đồ, trực quan hóa
+├── src/
+│   ├── config.py                # Cấu hình trung tâm (model, k-NN, PCA, TTA, resolution...)
+│   ├── models/
+│   │   ├── feature_extractor.py # EfficientNet / ResNet50 / DINOv2 (torch.hub), AMP, TTA
+│   │   ├── graph_builder.py     # k-NN có trọng số, mutual k-NN, sim_power
+│   │   └── clustering.py        # Infomap, Leiden, Louvain, LPA
+│   └── utils/
+│       ├── data_loader.py
+│       ├── evaluation.py      # NMI, Accuracy (Hungarian), Purity, ARI, Modularity
+│       ├── feature_cache.py
+│       ├── feature_postprocess.py  # PCA whitening (sau extract hoặc sau load cache)
+│       ├── result_logger.py
+│       └── visualization.py    # comparison, radar, distribution, clusters.png
 │
-├── data/                        # Dataset ImageNet-Hard (.parquet)
-│   ├── validation-0.parquet
-│   ├── ...
-│
-├── results/                     # Output & cache
+├── data/                        # ImageNet-Hard (*.parquet) — cấu hình DATA_PATH
+├── results/
 │   ├── results.csv
-│   ├── tuning_results.csv
 │   ├── comparison.png
 │   ├── radar_chart.png
 │   ├── clusters.png
 │   ├── cluster_distribution.png
 │   └── cache/
-│       └── features_dinov2_vits14_full.npz
+│       └── features_<model>_full.npz
 │
-├── docs/                        # Documentation
-│   ├── PIPELINE_DETAIL.md       # Chi tiết pipeline
-│   ├── FINETUNING_GUIDE.md      # Hướng dẫn fine-tuning
-│   └── LOGGING_GUIDE.md         # Hướng dẫn logging
+├── docs/
+│   ├── PIPELINE_DETAIL.md
+│   ├── FINETUNING_GUIDE.md
+│   └── LOGGING_GUIDE.md
 │
-└── notebooks/                   # Jupyter notebooks cho experiments
+└── notebooks/
     ├── EDA.ipynb
-    └── image_size_analysis.ipynb
+    ├── image_size_analysis.ipynb
+    └── kaggle_feature_extract.ipynb   # Extract trên Kaggle → .npz
 ```
 
 ## Các thuật toán được implement
 
-| #   | Thuật toán  | Mô tả                                                                |
-| --- | ----------- | -------------------------------------------------------------------- |
-| 1   | **Infomap** | Dựa trên lý thuyết thông tin, tối thiểu hóa độ dài mô tả random walk |
-| 2   | **Leiden**  | Cải tiến của Louvain, đảm bảo các cộng đồng kết nối tốt hơn          |
-| 3   | **Louvain** | Tối ưu hóa modularity theo hướng greedy                              |
-| 4   | **LPA**     | Label Propagation Algorithm - Lan truyền nhãn                        |
+| # | Thuật toán  | Mô tả |
+| --- | ----------- | ----- |
+| 1 | **Infomap** | Random walk, Map Equation |
+| 2 | **Leiden**  | Modularity + resolution (leidenalg) |
+| 3 | **Louvain** | Multilevel + resolution (igraph) |
+| 4 | **LPA**     | Label Propagation |
 
-## Pipeline xử lý
+## Pipeline xử lý (tóm tắt)
 
 ```
-1. Load Data → 2. Feature Extraction → 3. Build Graph → 4. Clustering → 5. Evaluation
-     ↓                   ↓                    ↓              ↓              ↓
-  Parquet           EfficientNet          k-NN Graph     4 Algorithms   NMI, ARI,
-   Files            (1280 dims)           (Cosine)       Infomap,...    Purity
+Parquet → [Feature extraction ± TTA] → L2 normalize → [.npz cache RAW]
+         → [PCA whitening nếu bật] → k-NN graph (cosine, mutual, sim_power)
+         → 4 thuật toán → Metrics → plots + CSV
 ```
+
+- **Feature**: torchvision (EfficientNet-V2-L, ResNet50) hoặc **DINOv2** qua `torch.hub` (input 518 cho ViT/14). Trên CUDA dùng mixed precision.
+- **TTA / PCA**: bật trong [`src/config.py`](src/config.py) (`USE_TTA`, `USE_PCA_WHITEN`, `PCA_DIM`).
+- **Đồ thị**: `K_NEIGHBORS`, `MUTUAL_KNN`, `SIM_POWER` — xem [`src/models/graph_builder.py`](src/models/graph_builder.py).
 
 ## Cài đặt
 
@@ -92,99 +90,99 @@ pip install -r requirements.txt
 ## Chạy chương trình
 
 ```bash
-# Chạy với toàn bộ dữ liệu
+# Toàn bộ dữ liệu (theo DATA_PATH và SAMPLE_SIZE trong config / CLI)
 python main.py
 
-# Chạy với sample nhỏ để test nhanh
+# Giới hạn số mẫu (debug)
 python main.py --sample 500
 
-# Tự động chọn thiết bị (GPU nếu có CUDA, ngược lại CPU)
-python main.py --device auto
-
-# Bắt buộc chạy trên CPU
+# Thiết bị extract
+python main.py --device auto    # mặc định
 python main.py --device cpu
+python main.py --device cuda
 
-# Yêu cầu chạy trên GPU (nếu không có CUDA sẽ tự fallback về CPU)
-python main.py --device gpu
+# Lưu feature cache (RAW trong .npz, chưa PCA — PCA áp sau khi load)
+python main.py --save-feature-cache
 
-# Chạy full pipeline và lưu feature cache để dùng lại
-python main.py --device gpu --save-feature-cache
-
-# Chạy từ feature cache (bỏ qua bước extract feature)
+# Chạy từ cache (bỏ qua extract; vẫn PCA + graph + clustering nếu bật trong config)
 python main.py --use-feature-cache
 
-# Dùng đường dẫn cache cụ thể
-python main.py --use-feature-cache --feature-cache-path results/cache/features_efficientnet_v2_l_full.npz
+# Đường dẫn cache tùy chỉnh
+python main.py --use-feature-cache --feature-cache-path results/cache/features_dinov2_vitl14_full.npz
+
+# Tắt ghi CSV
+python main.py --no-log
+
+# File CSV log tùy chỉnh
+python main.py --log-path results/my_runs.csv
 ```
+
+### clusters.png khi dùng `--use-feature-cache`
+
+Pipeline **đọc lại parquet** (cùng `--sample` và `DATA_PATH` như lúc tạo cache) để lấy bytes ảnh, rồi vẽ `results/clusters.png`. Nếu không có parquet hoặc số dòng không khớp cache, mosaic sẽ bị bỏ qua (có cảnh báo).
 
 ## Tái sử dụng feature đã trích xuất
 
-Bạn có thể lưu lại `feature vectors` và `true labels` để không cần trích xuất lại từ ảnh ở các lần chạy sau.
-
-### 1) Lần chạy đầu: tạo cache
+### 1) Tạo cache
 
 ```bash
-python main.py --device gpu --save-feature-cache
+python main.py --device cuda --save-feature-cache
 ```
 
-Mặc định cache được lưu tại:
+Mặc định:
 
 ```text
-results/cache/features_<model_name>_<sample|full>.npz
+results/cache/features_<MODEL_NAME>_<full|sample{N}>.npz
 ```
 
-Ví dụ:
-
-- `results/cache/features_efficientnet_v2_l_full.npz`
-- `results/cache/features_efficientnet_v2_l_sample500.npz`
-
-### 2) Lần chạy sau: dùng cache
+### 2) Dùng cache
 
 ```bash
 python main.py --use-feature-cache
 ```
 
-Khi dùng cache, pipeline sẽ bắt đầu từ bước xây dựng đồ thị + 4 thuật toán + đánh giá.
+### 3) Extract chỉ để lấy .npz (máy yếu / Kaggle)
+
+```bash
+python scripts/extract_features_only.py --data-path data --output results/cache/features_<model>_full.npz
+```
+
+Chi tiết notebook: [`notebooks/kaggle_feature_extract.ipynb`](notebooks/kaggle_feature_extract.ipynb).
 
 ## Metrics đánh giá
 
-| Metric         | Mô tả                                                                  |
-| -------------- | ---------------------------------------------------------------------- |
-| **NMI**        | Normalized Mutual Information - Đo lường thông tin chung giữa clusters |
-| **ARI**        | Adjusted Rand Index - Đo lường sự tương đồng có điều chỉnh             |
-| **Purity**     | Độ thuần khiết của các cluster                                         |
-| **Modularity** | Chất lượng cấu trúc cộng đồng trên đồ thị                              |
+| Metric | Mô tả |
+| ------ | ----- |
+| **NMI** | Normalized Mutual Information |
+| **Accuracy** | Clustering accuracy (Hungarian / optimal assignment) |
+| **Purity** | Purity; hỗ trợ multi-label (relaxed purity) |
+| **ARI** | Adjusted Rand Index |
+| **Modularity** | Trên đồ thị có trọng số |
 
-## Tham số có thể điều chỉnh (Fine-tuning)
+Biểu đồ so sánh và radar gồm đủ các metric trên (trừ Modularity trên radar được clip không âm khi vẽ).
 
-Trong `src/config.py`:
+## Tham số chính
 
-```python
-class Config:
-    # Feature Extraction
-    MODEL_NAME = 'efficientnet_v2_l'  # Model backbone
-    BATCH_SIZE = 32
+Chỉnh trong [`src/config.py`](src/config.py):
 
-    # Graph Construction
-    K_NEIGHBORS = 10        # Số láng giềng k-NN (quan trọng!)
-    SIMILARITY_METRIC = 'cosine'
+- **Model / extract**: `MODEL_NAME`, `BATCH_SIZE`, `USE_TTA`, `TTA_SCALES`, `TTA_FLIPS`
+- **Hậu xử lý vector**: `USE_PCA_WHITEN`, `PCA_DIM`
+- **Đồ thị**: `K_NEIGHBORS`, `SIMILARITY_METRIC`, `MUTUAL_KNN`, `SIM_POWER`
+- **Phân cụm**: `LEIDEN_RESOLUTION`, `LOUVAIN_RESOLUTION`
+- **Dữ liệu**: `DATA_PATH`, `RESULTS_PATH`, `SAMPLE_SIZE` (hoặc `--sample` khi chạy)
 
-    # Clustering
-    LEIDEN_RESOLUTION = 1.0   # Tăng → nhiều clusters nhỏ
-    LOUVAIN_RESOLUTION = 1.0
-```
+Tuning k và resolution: chạy [`tune_params.py`](tune_params.py) (đọc feature cache; composite score ưu tiên accuracy — xem docstring trong file).
 
-### Quick Tips để cải thiện kết quả:
+### Gợi ý nhanh
 
-1. **Tăng K_NEIGHBORS** lên 20-30
-2. **Tune LEIDEN_RESOLUTION** theo số classes (~ N_classes / 10)
-3. **L2 normalize features** trước khi build graph
-
-📚 **Chi tiết đầy đủ**: Xem [docs/FINETUNING_GUIDE.md](docs/FINETUNING_GUIDE.md)
+1. Đồng bộ `--sample` và tên file cache (`full` vs `sample500`).
+2. `DATA_PATH` trỏ thư mục chứa `*.parquet` (glob toàn bộ file trong thư mục).
+3. ImageNet-Hard: số class ~830 — có thể tune resolution để số cluster gần số class khi cần accuracy.
 
 ## Tài liệu
 
-| File                                                 | Mô tả                           |
-| ---------------------------------------------------- | ------------------------------- |
-| [docs/PIPELINE_DETAIL.md](docs/PIPELINE_DETAIL.md)   | Chi tiết từng bước của pipeline |
-| [docs/FINETUNING_GUIDE.md](docs/FINETUNING_GUIDE.md) | Hướng dẫn tối ưu hóa kết quả    |
+| File | Mô tả |
+| ---- | ----- |
+| [docs/PIPELINE_DETAIL.md](docs/PIPELINE_DETAIL.md) | Chi tiết từng bước |
+| [docs/FINETUNING_GUIDE.md](docs/FINETUNING_GUIDE.md) | Gợi ý tối ưu tham số |
+| [docs/LOGGING_GUIDE.md](docs/LOGGING_GUIDE.md) | Cấu trúc CSV `results.csv` |
