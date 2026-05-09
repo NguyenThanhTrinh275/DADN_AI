@@ -57,6 +57,7 @@ class ResultLogger:
             'n_clusters',          # Số cluster được phát hiện
             'avg_cluster_size',    # Kích thước trung bình của cluster
             'nmi',                 # Normalized Mutual Information
+            'accuracy',            # Clustering Accuracy (Hungarian)
             'purity',              # Purity Score
             'ari',                 # Adjusted Rand Index
             'modularity',          # Modularity Score
@@ -114,6 +115,7 @@ class ResultLogger:
                 'louvain_resolution': louvain_resolution,
                 'algorithm': algo_name,
                 'nmi': self._format_value(metrics.get('NMI')),
+                'accuracy': self._format_value(metrics.get('Accuracy')),
                 'purity': self._format_value(metrics.get('Purity')),
                 'ari': self._format_value(metrics.get('ARI')),
                 'modularity': self._format_value(metrics.get('Modularity')),

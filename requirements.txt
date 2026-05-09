@@ -5,6 +5,7 @@ torchvision
 pillow
 matplotlib
 scikit-learn
+scipy
 python-igraph
 leidenalg
 infomap

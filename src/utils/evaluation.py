@@ -8,6 +8,7 @@ from sklearn.metrics import (
     completeness_score,
     v_measure_score
 )
+from scipy.optimize import linear_sum_assignment
 
 
 def _is_multilabel_array(true_labels):
@@ -143,6 +144,32 @@ def compute_modularity(graph, labels):
     return graph.modularity(labels)
 
 
+def compute_accuracy(true_labels, pred_labels):
+    """
+    Clustering Accuracy (Hungarian Algorithm)
+
+    Tìm ánh xạ tối ưu giữa cluster ID và class thật sự bằng bài toán gán
+    (linear assignment), sau đó tính tỉ lệ phân loại đúng.
+    Range: [0, 1], 1 = hoàn hảo
+    """
+    true_labels = np.asarray(true_labels)
+    pred_labels = np.asarray(pred_labels)
+
+    true_classes = np.unique(true_labels)
+    pred_classes = np.unique(pred_labels)
+
+    D = max(len(true_classes), len(pred_classes))
+    cost_matrix = np.zeros((D, D), dtype=np.int64)
+    true_to_idx = {c: i for i, c in enumerate(true_classes)}
+    pred_to_idx = {c: i for i, c in enumerate(pred_classes)}
+
+    for t, p in zip(true_labels, pred_labels):
+        cost_matrix[true_to_idx[t], pred_to_idx[p]] += 1
+
+    row_ind, col_ind = linear_sum_assignment(-cost_matrix)
+    return cost_matrix[row_ind, col_ind].sum() / len(true_labels)
+
+
 def compute_fmi(true_labels, pred_labels):
     """
     Fowlkes-Mallows Index
@@ -183,15 +210,18 @@ def evaluate_clustering(true_labels, pred_labels, graph=None):
         purity = compute_relaxed_purity(true_label_sets, pred_labels)
         nmi = compute_nmi(true_labels_single, pred_labels)
         ari = compute_ari(true_labels_single, pred_labels)
+        accuracy = compute_accuracy(true_labels_single, pred_labels)
     else:
         purity = compute_purity(true_labels, pred_labels)
         nmi = compute_nmi(true_labels, pred_labels)
         ari = compute_ari(true_labels, pred_labels)
+        accuracy = compute_accuracy(true_labels, pred_labels)
 
     modularity = compute_modularity(graph, pred_labels) if graph is not None else np.nan
 
     return {
         'NMI': nmi,
+        'Accuracy': accuracy,
         'Purity': purity,
         'ARI': ari,
         'Modularity': modularity,
@@ -227,7 +257,7 @@ def print_evaluation_results(results, metrics=None):
         metrics: List metrics cần hiển thị (mặc định: NMI, Purity, ARI, Modularity)
     """
     if metrics is None:
-        metrics = ['NMI', 'Purity', 'ARI', 'Modularity']
+        metrics = ['NMI', 'Accuracy', 'Purity', 'ARI', 'Modularity']
     
     # Header
     print("\n" + "="*70)

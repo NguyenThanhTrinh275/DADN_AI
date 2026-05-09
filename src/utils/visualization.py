@@ -1,6 +1,3 @@
-"""
-Module visualization cho kết quả phân cụm
-"""
 import os
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,10 +26,10 @@ def plot_metrics_comparison(results, save_path=None):
         save_path = os.path.join(config.RESULTS_PATH, 'comparison.png')
     
     algorithms = list(results.keys())
-    metrics = ['NMI', 'Purity', 'ARI', 'Modularity']
-    colors = ['#2ecc71', '#3498db', '#e74c3c', '#9b59b6']
+    metrics = ['NMI', 'Accuracy', 'Purity', 'ARI', 'Modularity']
+    colors = ['#2ecc71', '#f39c12', '#3498db', '#e74c3c', '#9b59b6']
 
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    fig, axes = plt.subplots(2, 3, figsize=(18, 10))
     axes = axes.flatten()
 
     for idx, metric in enumerate(metrics):
@@ -56,7 +53,10 @@ def plot_metrics_comparison(results, save_path=None):
 
         axes[idx].axhline(y=0, color='black', linestyle='-', linewidth=0.5)
         axes[idx].grid(axis='y', alpha=0.3)
-    
+
+    # Ẩn ô thứ 6 (không dùng)
+    axes[5].set_visible(False)
+
     plt.tight_layout()
     plt.savefig(save_path, dpi=150, bbox_inches='tight')
     plt.show()
@@ -77,7 +77,7 @@ def plot_radar_chart(results, save_path=None):
         save_path = os.path.join(config.RESULTS_PATH, 'radar_chart.png')
     
     algorithms = list(results.keys())
-    metrics = ['NMI', 'Purity', 'ARI', 'Modularity']
+    metrics = ['NMI', 'Accuracy', 'Purity', 'ARI', 'Modularity']
 
     # Số lượng metrics
     n_metrics = len(metrics)

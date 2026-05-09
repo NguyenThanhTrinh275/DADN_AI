@@ -34,7 +34,7 @@ Cách dùng:
     python tune_params.py --output results/tuning_results.csv
 
 Metric tổng hợp (Composite Score):
-    Score = 0.4 × NMI + 0.3 × ARI + 0.2 × Purity + 0.1 × Modularity
+    Score = 0.30 × NMI + 0.25 × ARI + 0.20 × Accuracy + 0.15 × Purity + 0.10 × Modularity
 """
 
 import argparse
@@ -64,10 +64,11 @@ COARSE_K_VALUES          = [3, 5, 10, 15, 20, 25, 30]
 COARSE_RESOLUTION_VALUES = [1.0, 5.0, 10.0, 20.0, 30.0, 50.0, 80.0, 100.0, 120.0, 150.0, 200.0]
 
 # Trọng số Composite Score
-WEIGHT_NMI        = 0.4
-WEIGHT_ARI        = 0.3
-WEIGHT_PURITY     = 0.2
-WEIGHT_MODULARITY = 0.1
+WEIGHT_NMI        = 0.30
+WEIGHT_ARI        = 0.25
+WEIGHT_ACCURACY   = 0.20
+WEIGHT_PURITY     = 0.15
+WEIGHT_MODULARITY = 0.10
 
 # Tên cột CSV output
 CSV_FIELDNAMES = [
@@ -79,6 +80,7 @@ CSV_FIELDNAMES = [
     "n_clusters",
     "avg_cluster_size",
     "nmi",
+    "accuracy",
     "purity",
     "ari",
     "modularity",
@@ -91,15 +93,17 @@ CSV_FIELDNAMES = [
 # HELPER FUNCTIONS
 # ══════════════════════════════════════════════════════════════════════════════
 
-def composite_score(nmi: float, ari: float, purity: float, modularity: float) -> float:
-    """Tính Composite Score từ 4 metrics."""
+def composite_score(nmi: float, ari: float, accuracy: float, purity: float, modularity: float) -> float:
+    """Tính Composite Score từ 5 metrics."""
     # Clamp để tránh NaN/âm ảnh hưởng
     nmi = max(nmi, 0.0)
     ari = max(ari, 0.0)
+    accuracy = max(accuracy, 0.0)
     purity = max(purity, 0.0)
     modularity = max(modularity, 0.0)
     return (
-        WEIGHT_NMI * nmi + WEIGHT_ARI * ari + WEIGHT_PURITY * purity + WEIGHT_MODULARITY * modularity
+        WEIGHT_NMI * nmi + WEIGHT_ARI * ari + WEIGHT_ACCURACY * accuracy
+        + WEIGHT_PURITY * purity + WEIGHT_MODULARITY * modularity
     )
 
 
@@ -170,9 +174,10 @@ def evaluate_pair(
 
         nmi_v        = metrics.get("NMI", float("nan"))
         ari_v        = metrics.get("ARI", float("nan"))
+        accuracy_v   = metrics.get("Accuracy", float("nan"))
         purity_v     = metrics.get("Purity", float("nan"))
         modularity_v = metrics.get("Modularity", float("nan"))
-        score_v      = composite_score(nmi_v, ari_v, purity_v, modularity_v)
+        score_v      = composite_score(nmi_v, ari_v, accuracy_v, purity_v, modularity_v)
 
         stats = get_cluster_statistics(pred_labels)
 
@@ -185,6 +190,7 @@ def evaluate_pair(
             "n_clusters":      stats["n_clusters"],
             "avg_cluster_size": fmt(stats["avg_cluster_size"]),
             "nmi":             fmt(nmi_v),
+            "accuracy":        fmt(accuracy_v),
             "purity":          fmt(purity_v),
             "ari":             fmt(ari_v),
             "modularity":      fmt(modularity_v),
@@ -197,8 +203,8 @@ def evaluate_pair(
 
         print(
             f"    [{algo_name}] k={k:>2d} res={resolution:>6.1f} | "
-            f"NMI={nmi_v:.4f} ARI={ari_v:.4f} Purity={purity_v:.4f} "
-            f"Mod={modularity_v:.4f} Score={score_v:.4f} "
+            f"NMI={nmi_v:.4f} ARI={ari_v:.4f} Acc={accuracy_v:.4f} "
+            f"Purity={purity_v:.4f} Mod={modularity_v:.4f} Score={score_v:.4f} "
             f"Clusters={stats['n_clusters']} ({elapsed:.1f}s)"
         )
 
@@ -323,20 +329,21 @@ def print_report(all_rows: list[dict], top_n: int = 5) -> None:
     sorted_rows = sorted(all_rows, key=safe_score, reverse=True)
     top_rows = sorted_rows[:top_n]
 
-    sep = "═" * 100
+    sep = "═" * 110
     print(f"\n{sep}")
     print(f"  TOP {top_n} CONFIGURATIONS (ranked by Composite Score)")
     print(sep)
     header = (
         f"{'Rank':<5} {'Phase':<7} {'k':>4} {'Resolution':>11} {'Algorithm':<9} "
-        f"{'NMI':>7} {'ARI':>7} {'Purity':>7} {'Mod':>7} {'Score':>7} {'Clusters':>9}"
+        f"{'NMI':>7} {'ARI':>7} {'Acc':>7} {'Purity':>7} {'Mod':>7} {'Score':>7} {'Clusters':>9}"
     )
     print(header)
-    print("-" * 100)
+    print("-" * 110)
 
     for rank, row in enumerate(top_rows, start=1):
         nmi_v  = float(row["nmi"])        if row["nmi"]        else float("nan")
         ari_v  = float(row["ari"])        if row["ari"]        else float("nan")
+        acc_v  = float(row["accuracy"])   if row.get("accuracy") else float("nan")
         pur_v  = float(row["purity"])     if row["purity"]     else float("nan")
         mod_v  = float(row["modularity"]) if row["modularity"] else float("nan")
         sc_v   = float(row["composite_score"]) if row["composite_score"] else float("nan")
@@ -344,13 +351,12 @@ def print_report(all_rows: list[dict], top_n: int = 5) -> None:
         print(
             f"{rank:<5} {row['phase']:<7} {int(row['k_neighbors']):>4} "
             f"{float(row['resolution']):>11.1f} {row['algorithm']:<9} "
-            f"{nmi_v:>7.4f} {ari_v:>7.4f} {pur_v:>7.4f} {mod_v:>7.4f} "
+            f"{nmi_v:>7.4f} {ari_v:>7.4f} {acc_v:>7.4f} {pur_v:>7.4f} {mod_v:>7.4f} "
             f"{sc_v:>7.4f} {row['n_clusters']:>9}"
         )
 
     print(sep)
 
-    # Recommendation
     best = top_rows[0]
     print("\n  🏆 RECOMMENDATION:")
 

@@ -4,7 +4,7 @@ class Config:
     DATA_PATH = 'data'
     RESULTS_PATH = 'results'
     
-    MODEL_NAME = 'dinov2_vits14'  # efficientnet_v2_l, dinov2_vits14
+    MODEL_NAME = 'efficientnet_v2_l'  # efficientnet_v2_l, dinov2_vits14
     BATCH_SIZE = 32
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
     

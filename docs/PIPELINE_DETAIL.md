@@ -175,12 +175,12 @@ Euclidean Distance: dist(A, B) = ||A - B||
 ┌──────────────────────────────────────────────────────────────┐
 │ Nguyên lý: Information Theory + Random Walk                  │
 │                                                              │
-│ - Mô hình hóa random walk trên đồ thị                       │
-│ - Tối thiểu hóa Map Equation (description length)           │
-│ - Communities = vùng mà walker dành nhiều thời gian         │
+│ - Mô hình hóa random walk trên đồ thị                        │
+│ - Tối thiểu hóa Map Equation (description length)            │
+│ - Communities = vùng mà walker dành nhiều thời gian          │
 │                                                              │
-│ Ưu điểm: Phát hiện cấu trúc hierarchical                    │
-│ Nhược điểm: Chậm với đồ thị rất lớn                         │
+│ Ưu điểm: Phát hiện cấu trúc hierarchical                     │
+│ Nhược điểm: Chậm với đồ thị rất lớn                          │
 └──────────────────────────────────────────────────────────────┘
 ```
 
@@ -188,19 +188,19 @@ Euclidean Distance: dist(A, B) = ||A - B||
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│ Nguyên lý: Cải tiến của Louvain                             │
+│ Nguyên lý: Cải tiến của Louvain                              │
 │                                                              │
 │ 3 Phases:                                                    │
-│ 1. Local moving: Di chuyển nodes giữa communities           │
-│ 2. Refinement: Đảm bảo communities connected tốt            │
-│ 3. Aggregation: Gộp communities thành super-nodes           │
+│ 1. Local moving: Di chuyển nodes giữa communities            │
+│ 2. Refinement: Đảm bảo communities connected tốt             │
+│ 3. Aggregation: Gộp communities thành super-nodes            │
 │                                                              │
 │ Resolution parameter γ:                                      │
-│ - γ < 1: Ít clusters lớn                                    │
-│ - γ = 1: Cân bằng                                           │
-│ - γ > 1: Nhiều clusters nhỏ                                 │
+│ - γ < 1: Ít clusters lớn                                     │
+│ - γ = 1: Cân bằng                                            │
+│ - γ > 1: Nhiều clusters nhỏ                                  │
 │                                                              │
-│ Ưu điểm: Kết quả ổn định, không có poorly connected         │
+│ Ưu điểm: Kết quả ổn định, không có poorly connected          │
 └──────────────────────────────────────────────────────────────┘
 ```
 
