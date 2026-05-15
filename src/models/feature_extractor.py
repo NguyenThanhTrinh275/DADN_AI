@@ -29,7 +29,6 @@ class FeatureExtractor:
     
     SUPPORTED_MODELS = {
         'efficientnet_v2_l': {'input_size': 480, 'feature_dim': 1280},
-        'resnet50':          {'input_size': 224, 'feature_dim': 2048},
         'dinov2_vits14':     {'input_size': 518, 'feature_dim': 384},
         'dinov2_vitb14':     {'input_size': 518, 'feature_dim': 768},
         'dinov2_vitl14':     {'input_size': 518, 'feature_dim': 1024},

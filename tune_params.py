@@ -58,7 +58,7 @@ from src.models.graph_builder import build_knn_graph
 from src.models.clustering import cluster_leiden, cluster_louvain
 from src.utils.evaluation import evaluate_clustering, get_cluster_statistics
 
-N_TARGET_CLASSES = 830
+N_TARGET_CLASSES = 815
 
 # Không gian tham số Phase 1 (Coarse)
 # K cao + resolution thấp hơn để n_clusters bám sát N_TARGET_CLASSES = 830
@@ -66,11 +66,11 @@ COARSE_K_VALUES          = [10, 15, 20, 25, 30]
 COARSE_RESOLUTION_VALUES = [0.5, 1.0, 2.0, 5.0, 10.0, 20.0, 40.0, 80.0]
 
 # Trọng số Composite Score (ưu tiên Accuracy — mục tiêu chính của project)
-WEIGHT_ACCURACY   = 0.50
-WEIGHT_NMI        = 0.20
-WEIGHT_ARI        = 0.15
-WEIGHT_PURITY     = 0.10
-WEIGHT_MODULARITY = 0.05
+WEIGHT_ACCURACY   = 1.00
+WEIGHT_NMI        = 0.00
+WEIGHT_ARI        = 0.00
+WEIGHT_PURITY     = 0.00
+WEIGHT_MODULARITY = 0.00
 
 # Tên cột CSV output
 CSV_FIELDNAMES = [

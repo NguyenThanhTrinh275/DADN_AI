@@ -8,7 +8,7 @@ class Config:
     BATCH_SIZE = 8
     DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-    K_NEIGHBORS = 30
+    K_NEIGHBORS = 31
     SIMILARITY_METRIC = 'cosine'
     MUTUAL_KNN = True
     SIM_POWER = 4.0
@@ -17,11 +17,11 @@ class Config:
     TTA_FLIPS = (False, True)
     TTA_SCALES = (518,)
 
-    USE_PCA_WHITEN = True
+    USE_PCA_WHITEN = False
     PCA_DIM = 256
 
-    LEIDEN_RESOLUTION = 40.0
-    LOUVAIN_RESOLUTION = 46.0
+    LEIDEN_RESOLUTION = 34.0
+    LOUVAIN_RESOLUTION = 34.0
 
     SAMPLE_SIZE = None
     RANDOM_STATE = 42
